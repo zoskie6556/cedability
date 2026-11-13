@@ -44,6 +44,10 @@ To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use th
 ng test
 ```
 
+## Firebase
+
+Firebase and AngularFire are initialized during application bootstrap, so contributors do not need a separate local Firebase setup. The web app configuration is in `src/app/core/firebase/firebase.config.ts`. This client-side configuration is public; protect Firebase data with Firebase Security Rules and configure authorized domains in the Firebase Console.
+
 ## Running end-to-end tests
 
 For end-to-end (e2e) testing, run:
