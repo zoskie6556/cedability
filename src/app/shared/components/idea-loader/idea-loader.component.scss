@@ -1,0 +1,139 @@
+.idea-loader {
+  display: grid;
+  width: 5.5rem;
+  justify-items: center;
+  gap: 0.55rem;
+}
+
+.loader-art {
+  width: 5rem;
+  height: 5rem;
+  overflow: visible;
+}
+
+.loader-orbit {
+  stroke: #e8c8a9;
+  stroke-dasharray: 3 5;
+  stroke-width: 1.5;
+  transform-origin: center;
+  animation: orbit-turn 8s linear infinite;
+}
+
+.ceda-emblem,
+.idea-bulb,
+.light-rays {
+  stroke: #8c321c;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.ceda-emblem {
+  fill: #fff6ec;
+  transform-origin: center;
+  animation: ceda-gather 1.8s ease-in-out infinite;
+}
+
+.idea-bulb {
+  fill: #fff0d4;
+  transform-origin: center;
+  animation: idea-gather 1.8s ease-in-out infinite;
+}
+
+.light-rays {
+  stroke: #d94914;
+  opacity: 0;
+  animation: rays-glow 1.8s ease-in-out infinite;
+}
+
+.loader-flash {
+  fill: #f2b643;
+  filter: drop-shadow(0 0 5px #f2b643);
+  opacity: 0.35;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: light-flash 1.8s ease-in-out infinite;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes orbit-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ceda-gather {
+  0%,
+  100% {
+    transform: translateX(-1px);
+  }
+
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes idea-gather {
+  0%,
+  100% {
+    transform: translateX(1px);
+  }
+
+  50% {
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes rays-glow {
+  0%,
+  35%,
+  100% {
+    opacity: 0.25;
+  }
+
+  55%,
+  75% {
+    opacity: 1;
+  }
+}
+
+@keyframes light-flash {
+  0%,
+  35%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+
+  55%,
+  75% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-orbit,
+  .ceda-emblem,
+  .idea-bulb,
+  .light-rays,
+  .loader-flash {
+    animation: none;
+  }
+
+  .loader-flash,
+  .light-rays {
+    opacity: 1;
+  }
+}

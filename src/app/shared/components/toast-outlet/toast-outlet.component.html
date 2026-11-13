@@ -1,0 +1,42 @@
+@if (toastService.messages().length) {
+  <section class="toast-stack" aria-label="Notifications">
+    @for (toast of toastService.messages(); track toast.id) {
+      <article
+        class="toast-message"
+        [class.toast-success]="toast.kind === 'success'"
+        [class.toast-error]="toast.kind === 'error'"
+        [class.toast-info]="toast.kind === 'info'"
+        [attr.role]="toast.kind === 'error' ? 'alert' : 'status'"
+        [attr.aria-live]="toast.kind === 'error' ? 'assertive' : 'polite'"
+      >
+        <span class="toast-icon" aria-hidden="true">
+          @switch (toast.kind) {
+            @case ('success') {
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="m5 12 4.5 4.5L19 7" />
+              </svg>
+            }
+            @case ('error') {
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 8v5m0 3h.01" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            }
+            @case ('info') {
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 11v5m0-8h.01" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            }
+          }
+        </span>
+        <p>{{ toast.message }}</p>
+        <button type="button" class="toast-dismiss" (click)="dismiss(toast.id)" [attr.aria-label]="'Dismiss notification: ' + toast.message">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="m5 5 10 10M15 5 5 15" />
+          </svg>
+        </button>
+      </article>
+    }
+  </section>
+}

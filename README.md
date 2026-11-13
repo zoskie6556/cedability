@@ -48,6 +48,29 @@ ng test
 
 Firebase and AngularFire are initialized during application bootstrap, so contributors do not need a separate local Firebase setup. The web app configuration is in `src/app/core/firebase/firebase.config.ts`. This client-side configuration is public; protect Firebase data with Firebase Security Rules and configure authorized domains in the Firebase Console.
 
+## Shared loading and notifications
+
+Use the idea loader while an operation is pending:
+
+```html
+<app-idea-loader label="Submitting your idea" />
+```
+
+Inject `ToastService` to show a reusable success, error or information message:
+
+```ts
+import { inject } from '@angular/core';
+import { ToastService } from './core/services/toast.service';
+
+private readonly toast = inject(ToastService);
+
+this.toast.success('Your idea was submitted.');
+this.toast.error('We could not submit your idea.');
+this.toast.info('Your submission is being reviewed.');
+```
+
+The root app already includes the toast outlet. Toasts dismiss automatically after five seconds and can also be dismissed by the user.
+
 ## Running end-to-end tests
 
 For end-to-end (e2e) testing, run:
