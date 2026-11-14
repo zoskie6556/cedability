@@ -2,7 +2,11 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FirebaseError } from 'firebase/app';
 import { Router, RouterLink } from '@angular/router';
-import { AccountProfileUpdateError, AuthService } from '../../../../core/services/auth.service';
+import {
+  AccountFirestoreWriteError,
+  AccountProfileUpdateError,
+  AuthService,
+} from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 
 @Component({
@@ -45,7 +49,12 @@ export class CreateAccountComponent {
       this.toastService.success('Your account has been created.');
       await this.router.navigateByUrl('/account/user/profile');
     } catch (error: unknown) {
-      if (error instanceof AccountProfileUpdateError) {
+      if (error instanceof AccountFirestoreWriteError) {
+        this.toastService.error(
+          'Your account was created, but we could not save your user record. Please do not register again; contact support for help.',
+        );
+        await this.router.navigateByUrl('/account/user/profile');
+      } else if (error instanceof AccountProfileUpdateError) {
         this.toastService.error(
           'Your account was created, but we could not save your name. You can update it later.',
         );
