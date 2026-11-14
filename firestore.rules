@@ -1,0 +1,246 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isEvaluator() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['evaluator', 'admin'];
+    }
+
+    function canReadIdea(ownerId) {
+      return request.auth != null
+        && (request.auth.uid == ownerId || isEvaluator());
+    }
+
+    match /users/{userId} {
+      allow get: if signedInAs(userId);
+      allow list: if false;
+      allow create: if signedInAs(userId)
+        && request.resource.data.keys().hasAll([
+          'uid',
+          'email',
+          'fullName',
+          'emailVerified',
+          'phoneNumberVerified',
+          'role',
+          'profile',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'fullName',
+          'emailVerified',
+          'phoneNumberVerified',
+          'role',
+          'profile',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+        && request.resource.data.phoneNumberVerified == false
+        && request.resource.data.role == 'user';
+      allow update: if signedInAs(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'profile',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /ideas/{ideaId} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll([
+          'ownerId',
+          'ownerName',
+          'title',
+          'problem',
+          'proposedSolution',
+          'intendedBeneficiaries',
+          'plannedLocation',
+          'marketPlan',
+          'feasibilityPlan',
+          'financingPlan',
+          'milestones',
+          'aiAnalysisConsent',
+          'aiAnalysisConsentAt',
+          'automatedReview',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ownerId',
+          'ownerName',
+          'title',
+          'problem',
+          'proposedSolution',
+          'intendedBeneficiaries',
+          'plannedLocation',
+          'marketPlan',
+          'feasibilityPlan',
+          'financingPlan',
+          'milestones',
+          'aiAnalysisConsent',
+          'aiAnalysisConsentAt',
+          'automatedReview',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.aiAnalysisConsent == true
+        && request.resource.data.aiAnalysisConsentAt == request.time
+        && request.resource.data.marketPlan is map
+        && request.resource.data.marketPlan.keys().hasAll([
+          'targetMarket',
+          'alternatives',
+          'differentiation',
+          'marketValidation'
+        ])
+        && request.resource.data.marketPlan.keys().hasOnly([
+          'targetMarket',
+          'alternatives',
+          'differentiation',
+          'marketValidation'
+        ])
+        && request.resource.data.feasibilityPlan is map
+        && request.resource.data.feasibilityPlan.keys().hasAll([
+          'technicalApproach',
+          'operationalPlan',
+          'validationEvidence',
+          'assumptions',
+          'risks'
+        ])
+        && request.resource.data.feasibilityPlan.keys().hasOnly([
+          'technicalApproach',
+          'operationalPlan',
+          'validationEvidence',
+          'assumptions',
+          'risks'
+        ])
+        && request.resource.data.financingPlan is map
+        && request.resource.data.financingPlan.keys().hasAll([
+          'currency',
+          'totalFundingNeeded',
+          'fundingSources',
+          'costs'
+        ])
+        && request.resource.data.financingPlan.keys().hasOnly([
+          'currency',
+          'totalFundingNeeded',
+          'fundingSources',
+          'costs'
+        ])
+        && request.resource.data.financingPlan.totalFundingNeeded is number
+        && request.resource.data.financingPlan.totalFundingNeeded > 0
+        && request.resource.data.financingPlan.costs is list
+        && request.resource.data.financingPlan.costs.size() > 0
+        && request.resource.data.milestones is list
+        && request.resource.data.milestones.size() > 0
+        && request.resource.data.automatedReview is map
+        && request.resource.data.automatedReview.keys().hasAll([
+          'status',
+          'model',
+          'rubricVersion',
+          'summary',
+          'criteria',
+          'strengths',
+          'informationGaps',
+          'questionsForHumanEvaluator',
+          'limitations',
+          'startedAt',
+          'completedAt',
+          'failureMessage'
+        ])
+        && request.resource.data.automatedReview.keys().hasOnly([
+          'status',
+          'model',
+          'rubricVersion',
+          'summary',
+          'criteria',
+          'strengths',
+          'informationGaps',
+          'questionsForHumanEvaluator',
+          'limitations',
+          'startedAt',
+          'completedAt',
+          'failureMessage'
+        ])
+        && request.resource.data.automatedReview.status == 'queued'
+        && request.resource.data.automatedReview.model == 'gemini-3.5-flash-lite'
+        && request.resource.data.automatedReview.rubricVersion == 'cedability-v1'
+        && request.resource.data.automatedReview.summary == ''
+        && request.resource.data.automatedReview.criteria == null
+        && request.resource.data.automatedReview.strengths == []
+        && request.resource.data.automatedReview.informationGaps == []
+        && request.resource.data.automatedReview.questionsForHumanEvaluator == []
+        && request.resource.data.automatedReview.limitations == []
+        && request.resource.data.automatedReview.startedAt == null
+        && request.resource.data.automatedReview.completedAt == null
+        && request.resource.data.automatedReview.failureMessage == null;
+      allow get, list: if canReadIdea(resource.data.ownerId);
+      allow update, delete: if false;
+
+      match /questions/{questionId} {
+        function parentIdeaExists() {
+          return exists(/databases/$(database)/documents/ideas/$(ideaId));
+        }
+
+        function parentIdeaOwnerId() {
+          return get(/databases/$(database)/documents/ideas/$(ideaId)).data.ownerId;
+        }
+
+        allow get, list: if canReadIdea(parentIdeaOwnerId());
+        allow create: if parentIdeaExists()
+          && isEvaluator()
+          && request.resource.data.keys().hasAll([
+            'askedBy',
+            'question',
+            'createdAt',
+            'response',
+            'respondedBy',
+            'respondedAt'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'askedBy',
+            'question',
+            'createdAt',
+            'response',
+            'respondedBy',
+            'respondedAt'
+          ])
+          && request.resource.data.askedBy == request.auth.uid
+          && request.resource.data.question is string
+          && request.resource.data.question.size() > 0
+          && request.resource.data.question.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.response == null
+          && request.resource.data.respondedBy == null
+          && request.resource.data.respondedAt == null;
+        allow update: if signedInAs(parentIdeaOwnerId())
+          && resource.data.response == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'response',
+            'respondedBy',
+            'respondedAt'
+          ])
+          && request.resource.data.response is string
+          && request.resource.data.response.size() > 0
+          && request.resource.data.response.size() <= 5000
+          && request.resource.data.respondedBy == request.auth.uid
+          && request.resource.data.respondedAt == request.time;
+        allow delete: if false;
+      }
+    }
+  }
+}

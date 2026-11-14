@@ -1,1 +1,180 @@
-<p>review works!</p>
+<main id="main-content" class="review-page">
+  <div class="review-shell">
+    <header class="review-heading">
+      <p class="eyebrow">Human-led review</p>
+      <h1>Evaluator workspace</h1>
+      <p>Review submitted plans, use the advisory report as a starting point, and ask applicants for clarification.</p>
+    </header>
+
+    @if (isLoading()) {
+      <section class="review-state" role="status" aria-live="polite">
+        <p>Checking evaluator access...</p>
+      </section>
+    } @else if (loadError()) {
+      <section class="review-state" role="alert">
+        <p>{{ loadError() }}</p>
+        <button class="button-primary" type="button" (click)="loadReview()">Try again</button>
+      </section>
+    } @else if (!isEvaluator()) {
+      <section class="review-state" aria-labelledby="review-access-title">
+        <h2 id="review-access-title">Evaluator access required</h2>
+        <p>Sign in with an account that has been assigned the evaluator role to view submissions.</p>
+      </section>
+    } @else if (ideas().length === 0) {
+      <section class="review-state">
+        <h2>No submissions to review yet</h2>
+        <p>New submissions will appear here when applicants share their ideas.</p>
+      </section>
+    } @else {
+      <section class="submission-list" aria-label="Submitted ideas">
+        @for (idea of ideas(); track idea.id) {
+          <article class="submission-card">
+            <header class="submission-heading">
+              <div>
+                <p class="eyebrow">{{ idea.ownerName }} · {{ idea.plannedLocation }}</p>
+                <h2>{{ idea.title }}</h2>
+              </div>
+              <span class="status-chip">{{ idea.status }}</span>
+            </header>
+
+            <div class="idea-overview">
+              <section>
+                <h3>Problem</h3>
+                <p>{{ idea.problem }}</p>
+              </section>
+              <section>
+                <h3>Proposed solution</h3>
+                <p>{{ idea.proposedSolution }}</p>
+              </section>
+              <section>
+                <h3>Target market</h3>
+                <p>{{ idea.marketPlan.targetMarket }}</p>
+                <p><strong>Current alternatives:</strong> {{ idea.marketPlan.alternatives }}</p>
+                <p><strong>Market validation:</strong> {{ idea.marketPlan.marketValidation }}</p>
+              </section>
+              <section>
+                <h3>Feasibility</h3>
+                <p>{{ idea.feasibilityPlan.technicalApproach }}</p>
+                <p><strong>Operations:</strong> {{ idea.feasibilityPlan.operationalPlan }}</p>
+                <p><strong>Risks:</strong> {{ idea.feasibilityPlan.risks }}</p>
+              </section>
+              <section>
+                <h3>Financing</h3>
+                <p>
+                  Estimated need:
+                  {{ idea.financingPlan.currency }} {{ idea.financingPlan.totalFundingNeeded }}
+                </p>
+                <ul>
+                  @for (cost of idea.financingPlan.costs; track $index) {
+                    <li>{{ cost.item }} — {{ idea.financingPlan.currency }} {{ cost.amount }}: {{ cost.description }}</li>
+                  }
+                </ul>
+              </section>
+              <section>
+                <h3>Milestones</h3>
+                <ul>
+                  @for (milestone of idea.milestones; track $index) {
+                    <li>
+                      {{ milestone.title }} ({{ milestone.targetDate }}):
+                      {{ milestone.successMeasure }}
+                    </li>
+                  }
+                </ul>
+              </section>
+            </div>
+
+            <section class="ai-report" aria-labelledby="ai-report-title-{{ idea.id }}">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Advisory only</p>
+                  <h3 id="ai-report-title-{{ idea.id }}">Automated first look</h3>
+                </div>
+                <span class="status-chip">{{ idea.automatedReview?.status || 'not available' }}</span>
+              </div>
+              @if (idea.automatedReview?.status === 'complete' && idea.automatedReview; as report) {
+                <p>{{ report.summary }}</p>
+                <p><strong>Limitations:</strong> {{ report.limitations.join(' ') }}</p>
+                @if (report.informationGaps.length > 0) {
+                  <h4>Information gaps</h4>
+                  <ul>
+                    @for (gap of report.informationGaps; track $index) {
+                      <li>{{ gap }}</li>
+                    }
+                  </ul>
+                }
+                <div class="finding-grid">
+                  @for (criterion of criteria; track criterion.key) {
+                    @if (report.criteria?.[criterion.key]; as finding) {
+                      <section class="finding-card">
+                        <h4>{{ criterion.label }} · {{ finding.status }}</h4>
+                        @if (finding.evidence.length > 0) {
+                          <p><strong>Evidence noted:</strong> {{ finding.evidence.join(' ') }}</p>
+                        }
+                        @if (finding.informationGaps.length > 0) {
+                          <p><strong>Gaps:</strong> {{ finding.informationGaps.join(' ') }}</p>
+                        }
+                        @if (finding.evaluatorQuestions.length > 0) {
+                          <p><strong>Questions:</strong> {{ finding.evaluatorQuestions.join(' ') }}</p>
+                        }
+                      </section>
+                    }
+                  }
+                </div>
+              } @else if (idea.automatedReview?.status === 'failed') {
+                @if (idea.automatedReview; as failedReport) {
+                  <p>{{ failedReport.failureMessage }}</p>
+                }
+              } @else {
+                <p>The advisory analysis is {{ idea.automatedReview?.status || 'not available' }}. You can continue with a human review.</p>
+              }
+              <p class="ai-reminder">This report does not score or decide the idea. Apply independent human judgment.</p>
+            </section>
+
+            <section class="questions-section" aria-labelledby="questions-title-{{ idea.id }}">
+              <h3 id="questions-title-{{ idea.id }}">Clarification questions</h3>
+              @if ((questions()[idea.id] ?? []).length === 0) {
+                <p>No questions have been sent to the applicant.</p>
+              } @else {
+                <ol class="question-list">
+                  @for (question of questions()[idea.id]; track question.id) {
+                    <li>
+                      <p>{{ question.question }}</p>
+                      @if (question.response) {
+                        <p class="applicant-response"><strong>Applicant response:</strong> {{ question.response }}</p>
+                      } @else {
+                        <p class="awaiting-response">Awaiting applicant response</p>
+                      }
+                    </li>
+                  }
+                </ol>
+              }
+
+              <form class="question-form" (ngSubmit)="askQuestion(idea)">
+                <label [for]="'evaluator-question-' + idea.id">Ask the applicant for clarification</label>
+                <textarea
+                  [id]="'evaluator-question-' + idea.id"
+                  rows="3"
+                  maxlength="2000"
+                  required
+                  [value]="questionDrafts()[idea.id] ?? ''"
+                  (input)="setQuestionDraft(idea.id, $event)"
+                ></textarea>
+                @if (questionErrors()[idea.id]) {
+                  <p class="form-error" role="alert">{{ questionErrors()[idea.id] }}</p>
+                }
+                <button
+                  class="button-primary"
+                  type="submit"
+                  [disabled]="isPostingQuestion() === idea.id"
+                  [attr.aria-busy]="isPostingQuestion() === idea.id"
+                >
+                  {{ isPostingQuestion() === idea.id ? 'Sending...' : 'Send question' }}
+                </button>
+              </form>
+            </section>
+          </article>
+        }
+      </section>
+    }
+  </div>
+</main>

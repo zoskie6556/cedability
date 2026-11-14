@@ -10,6 +10,10 @@
 /node_modules
 npm-debug.log
 yarn-error.log
+/functions/node_modules
+/functions/lib
+/functions/.env*
+/functions/.secret.local
 
 # IDEs and editors
 .idea/

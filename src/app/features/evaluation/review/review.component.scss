@@ -1,0 +1,267 @@
+:host {
+  display: block;
+}
+
+.review-page {
+  min-height: calc(100vh - 200px);
+  padding: clamp(2rem, 5vw, 4rem) 1.25rem;
+  background:
+    radial-gradient(circle at 90% 8%, #f6e1ca 0, transparent 22rem),
+    var(--paper);
+}
+
+.review-shell {
+  width: min(1050px, 100%);
+  margin: 0 auto;
+}
+
+.review-heading {
+  max-width: 720px;
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 0.55rem;
+  color: var(--ceda-primary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.review-heading h1 {
+  margin: 0;
+  color: var(--ceda-deep);
+  font-family: var(--display-font);
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: -0.06em;
+  line-height: 1.12;
+}
+
+.review-heading > p:last-child {
+  color: var(--muted);
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+.review-state,
+.submission-card {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 20px 55px #4d211b12;
+}
+
+.review-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  margin: 2rem auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.review-state h2,
+.review-state p {
+  margin: 0;
+}
+
+.submission-list {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.submission-card {
+  display: grid;
+  gap: 1.25rem;
+  padding: clamp(1.1rem, 3vw, 1.75rem);
+}
+
+.submission-heading,
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.submission-heading h2 {
+  margin: 0;
+  color: var(--ceda-deep);
+  font-family: var(--display-font);
+  font-size: 1.5rem;
+}
+
+.status-chip {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.6rem;
+  border-radius: 99px;
+  background: #f3e8df;
+  color: #493832;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.idea-overview,
+.finding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.idea-overview > section,
+.finding-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #e8ddd5;
+  border-radius: 0.65rem;
+  background: #fffdfb;
+}
+
+.idea-overview h3,
+.questions-section h3,
+.ai-report h3 {
+  margin: 0 0 0.45rem;
+  color: var(--ceda-deep);
+  font-size: 1rem;
+}
+
+.idea-overview p,
+.ai-report p,
+.question-list p,
+.questions-section > p {
+  margin: 0.35rem 0;
+  color: #493832;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.idea-overview ul,
+.ai-report ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  color: #493832;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.ai-report,
+.questions-section {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+
+.ai-reminder,
+.awaiting-response {
+  color: var(--muted) !important;
+  font-size: 0.8rem !important;
+}
+
+.finding-card h4 {
+  margin: 0 0 0.5rem;
+  color: var(--ceda-deep);
+  font-size: 0.88rem;
+}
+
+.question-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding-left: 1.35rem;
+}
+
+.question-list li {
+  padding-left: 0.25rem;
+}
+
+.applicant-response {
+  padding: 0.65rem;
+  border-radius: 0.5rem;
+  background: #f3f6ed;
+}
+
+.question-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.question-form label {
+  color: #493832;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.question-form textarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #d9cbc1;
+  border-radius: 0.55rem;
+  background: #fffdfb;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.question-form textarea:focus-visible,
+.button-primary:focus-visible {
+  outline: 3px solid #d9491466;
+  outline-offset: 2px;
+}
+
+.button-primary {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.95rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: var(--ceda-primary);
+  color: #fff;
+  font: inherit;
+  font-size: 0.87rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-primary:hover {
+  background: var(--ceda-deep);
+}
+
+.button-primary:disabled {
+  background: #80665d;
+  cursor: wait;
+}
+
+.form-error {
+  margin: 0;
+  color: #91291c;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 700px) {
+  .review-page {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .idea-overview,
+  .finding-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .submission-heading,
+  .section-heading {
+    flex-direction: column;
+  }
+}

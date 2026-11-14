@@ -1,1 +1,304 @@
-<p>profile works!</p>
+<main id="main-content" class="profile-page">
+  <div class="profile-shell">
+    @if (isLoading()) {
+      <section class="page-state" role="status" aria-live="polite">
+        <span class="state-spinner" aria-hidden="true"></span>
+        <p>Loading your profile...</p>
+      </section>
+    } @else if (!hasSignedInUser()) {
+      <section class="page-state" aria-labelledby="signed-out-title">
+        <p class="eyebrow">Your Cedability space</p>
+        <h1 id="signed-out-title">Log in to view your profile</h1>
+        <p>Your profile and submitted ideas are available after you sign in.</p>
+        <a class="button-primary" routerLink="/account/user/login">Log in</a>
+      </section>
+    } @else if (loadError() && !user()) {
+      <section class="page-state" role="alert" aria-labelledby="profile-error-title">
+        <p class="eyebrow">Profile unavailable</p>
+        <h1 id="profile-error-title">We couldn’t open your profile</h1>
+        <p>{{ loadError() }}</p>
+        <button class="button-primary" type="button" (click)="loadProfile()">Try again</button>
+      </section>
+    } @else if (user(); as account) {
+      @if (!account.profile.onboardingCompleted) {
+        <div class="onboarding-layout">
+          <aside class="onboarding-intro" aria-labelledby="welcome-title">
+            <p class="eyebrow">Welcome to Cedability</p>
+            <h1 id="welcome-title">Your ideas can grow from here, {{ account.fullName }}.</h1>
+            <p>
+              Cedability helps you shape ideas, share them with a community, and get them evaluated
+              so promising projects can move forward.
+            </p>
+            <ul class="benefit-list">
+              <li>Turn a local need into a clear idea.</li>
+              <li>Share your plan and the people it can help.</li>
+              <li>Keep track of your submissions as they grow.</li>
+            </ul>
+          </aside>
+
+          <section class="onboarding-card" aria-labelledby="onboarding-title">
+            <p class="eyebrow">A quick introduction</p>
+            <h2 id="onboarding-title">Let’s get to know you</h2>
+            <p class="onboarding-caption">
+              A few details will help us understand your goals and support future idea evaluations.
+            </p>
+
+            <div class="chat-thread" aria-label="Cedability onboarding conversation">
+              <article class="chat-message assistant-message">
+                <span class="message-author">Cedability guide</span>
+                <p>
+                  What do you do, what would you like to create, and where do you hope to make it
+                  happen?
+                </p>
+              </article>
+              <article class="chat-message assistant-message">
+                <span class="message-author">A note from us</span>
+                <p>
+                  Your answers stay on your profile. You can add ideas after this introduction.
+                  Fields marked optional can be completed later.
+                </p>
+              </article>
+            </div>
+
+            <form class="onboarding-form" [formGroup]="form" (ngSubmit)="saveOnboarding()">
+              <div class="form-field">
+                <label for="profile-user-type">I am joining as</label>
+                <select id="profile-user-type" formControlName="userType">
+                  <option value="individual">An individual</option>
+                  <option value="organization">An organization</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="profile-profession">What is your profession or area of work?</label>
+                <input
+                  id="profile-profession"
+                  type="text"
+                  autocomplete="organization-title"
+                  formControlName="profession"
+                  [attr.aria-invalid]="form.controls.profession.touched && form.controls.profession.invalid"
+                  [attr.aria-describedby]="form.controls.profession.touched && form.controls.profession.invalid ? 'profile-profession-error' : null"
+                />
+                @if (form.controls.profession.touched && form.controls.profession.invalid) {
+                  <span class="field-error" id="profile-profession-error">Tell us your profession or area of work.</span>
+                }
+              </div>
+
+              <div class="form-field">
+                <label for="profile-purpose">What are you here to create or achieve?</label>
+                <textarea
+                  id="profile-purpose"
+                  rows="3"
+                  formControlName="purpose"
+                  [attr.aria-invalid]="form.controls.purpose.touched && form.controls.purpose.invalid"
+                  [attr.aria-describedby]="form.controls.purpose.touched && form.controls.purpose.invalid ? 'profile-purpose-error' : null"
+                ></textarea>
+                @if (form.controls.purpose.touched && form.controls.purpose.invalid) {
+                  <span class="field-error" id="profile-purpose-error">Tell us what you hope to create or achieve.</span>
+                }
+              </div>
+
+              <div class="form-field">
+                <label for="profile-location">Where do you plan to do it?</label>
+                <input
+                  id="profile-location"
+                  type="text"
+                  autocomplete="address-level2"
+                  formControlName="plannedLocation"
+                  [attr.aria-invalid]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid"
+                  [attr.aria-describedby]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid ? 'profile-location-error' : null"
+                />
+                @if (form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid) {
+                  <span class="field-error" id="profile-location-error">Add the place or community where you plan to work.</span>
+                }
+              </div>
+
+              <div class="form-field">
+                <label for="profile-goals">What are your goals?</label>
+                <textarea
+                  id="profile-goals"
+                  rows="3"
+                  formControlName="goals"
+                  [attr.aria-invalid]="form.controls.goals.touched && form.controls.goals.invalid"
+                  [attr.aria-describedby]="form.controls.goals.touched && form.controls.goals.invalid ? 'profile-goals-error' : null"
+                ></textarea>
+                @if (form.controls.goals.touched && form.controls.goals.invalid) {
+                  <span class="field-error" id="profile-goals-error">Share at least one goal you would like to work toward.</span>
+                }
+              </div>
+
+              <fieldset class="optional-fields">
+                <legend>Optional contact and address details</legend>
+                <div class="form-field">
+                  <label for="profile-phone">Phone number</label>
+                  <input id="profile-phone" type="tel" autocomplete="tel" formControlName="phoneNumber" />
+                  <span class="field-hint">Your phone number will remain unverified until verification is added.</span>
+                </div>
+                <div class="address-fields">
+                  <div class="form-field">
+                    <label for="profile-plot-number">Plot number</label>
+                    <input id="profile-plot-number" type="text" formControlName="plotNumber" />
+                  </div>
+                  <div class="form-field">
+                    <label for="profile-box-number">P.O. box number</label>
+                    <input id="profile-box-number" type="text" formControlName="boxNumber" />
+                  </div>
+                  <div class="form-field address-location">
+                    <label for="profile-address-location">Town or location</label>
+                    <input id="profile-address-location" type="text" formControlName="addressLocation" />
+                  </div>
+                </div>
+              </fieldset>
+
+              @if (loadError()) {
+                <p class="form-error" role="alert">{{ loadError() }}</p>
+              }
+
+              <button
+                class="button-primary save-button"
+                type="submit"
+                [disabled]="isSaving()"
+                [attr.aria-busy]="isSaving()"
+              >
+                {{ isSaving() ? 'Saving your profile...' : 'Save and continue' }}
+              </button>
+            </form>
+          </section>
+        </div>
+      } @else {
+        <header class="profile-heading">
+          <div>
+            <p class="eyebrow">Your Cedability space</p>
+            <h1>Welcome, {{ account.fullName }}</h1>
+            <p>Keep your goals close and follow the ideas you’ve shared.</p>
+          </div>
+          <a class="button-primary" routerLink="/submissions/idea">Submit an idea</a>
+        </header>
+
+        <section class="profile-card" aria-labelledby="profile-details-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Your introduction</p>
+              <h2 id="profile-details-title">Profile details</h2>
+            </div>
+          </div>
+          <dl class="profile-details">
+            <div><dt>Email</dt><dd>{{ account.email }}</dd></div>
+            <div><dt>Profession</dt><dd>{{ account.profile.profession }}</dd></div>
+            <div><dt>Here to</dt><dd>{{ account.profile.purpose }}</dd></div>
+            <div><dt>Planned location</dt><dd>{{ account.profile.plannedLocation }}</dd></div>
+            <div><dt>Goals</dt><dd>{{ account.profile.goals }}</dd></div>
+            <div><dt>Phone</dt><dd>{{ account.profile.contacts.phoneNumber || 'Not added' }}</dd></div>
+            <div>
+              <dt>Email verification</dt>
+              <dd>{{ account.emailVerified ? 'Verified' : 'Not verified' }}</dd>
+            </div>
+            <div>
+              <dt>Phone verification</dt>
+              <dd>{{ account.phoneNumberVerified ? 'Verified' : 'Not verified' }}</dd>
+            </div>
+            <div class="address-detail">
+              <dt>Address</dt>
+              <dd>
+                {{ account.profile.address.plotNumber || '—' }},
+                {{ account.profile.address.boxNumber || '—' }},
+                {{ account.profile.address.location || '—' }}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="ideas-section" aria-labelledby="ideas-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Your work in progress</p>
+              <h2 id="ideas-title">Your ideas</h2>
+            </div>
+            <a class="text-link" routerLink="/submissions/idea">Submit another idea</a>
+          </div>
+
+          @if (ideasError()) {
+            <p class="form-error" role="alert">{{ ideasError() }}</p>
+            <button class="text-button" type="button" (click)="loadProfile()">Try loading again</button>
+          } @else if (ideas().length === 0) {
+            <div class="empty-ideas">
+              <h3>Your next idea starts here</h3>
+              <p>You haven’t submitted an idea yet. Share a challenge you want to solve.</p>
+              <a class="button-secondary" routerLink="/submissions/idea">Start an idea</a>
+            </div>
+          } @else {
+            <div class="idea-list">
+              @for (idea of ideas(); track idea.id) {
+                <article class="idea-card">
+                  <div class="idea-card-heading">
+                    <div>
+                      <h3>{{ idea.title }}</h3>
+                      <p>{{ idea.plannedLocation }}</p>
+                    </div>
+                    <span class="idea-status">{{ idea.status }}</span>
+                  </div>
+                  <p class="idea-summary">{{ idea.proposedSolution }}</p>
+                  @if (idea.automatedReview; as report) {
+                    <section class="applicant-review" [attr.aria-labelledby]="'applicant-review-title-' + idea.id">
+                      <h4 [id]="'applicant-review-title-' + idea.id">Automated first look: {{ report.status }}</h4>
+                      @if (report.status === 'complete') {
+                        <p>{{ report.summary }}</p>
+                        @if (report.informationGaps.length > 0) {
+                          <p><strong>Information to consider:</strong> {{ report.informationGaps.join(' ') }}</p>
+                        }
+                      } @else if (report.failureMessage) {
+                        <p>{{ report.failureMessage }}</p>
+                      }
+                      <p class="review-disclaimer">This is advisory only. Human evaluators make all decisions.</p>
+                    </section>
+                  }
+                  @if ((ideaQuestions()[idea.id] ?? []).length > 0) {
+                    <section class="applicant-questions" [attr.aria-labelledby]="'applicant-questions-title-' + idea.id">
+                      <h4 [id]="'applicant-questions-title-' + idea.id">Evaluator questions</h4>
+                      @for (question of ideaQuestions()[idea.id] ?? []; track question.id) {
+                        <article class="applicant-question">
+                          <p>{{ question.question }}</p>
+                          @if (question.response) {
+                            <p class="applicant-response"><strong>Your response:</strong> {{ question.response }}</p>
+                          } @else {
+                            <form (ngSubmit)="respondToQuestion(idea.id, question.id)">
+                              <label [for]="'idea-response-' + question.id">Your response</label>
+                              <textarea
+                                [id]="'idea-response-' + question.id"
+                                rows="3"
+                                maxlength="5000"
+                                required
+                                [value]="responseDrafts()[question.id] ?? ''"
+                                (input)="setResponseDraft(question.id, $event)"
+                              ></textarea>
+                              <button
+                                class="button-secondary response-button"
+                                type="submit"
+                                [disabled]="respondingToQuestion() === question.id"
+                                [attr.aria-busy]="respondingToQuestion() === question.id"
+                              >
+                                {{ respondingToQuestion() === question.id ? 'Sending...' : 'Send response' }}
+                              </button>
+                            </form>
+                          }
+                        </article>
+                      }
+                    </section>
+                  }
+                  <p class="idea-date">
+                    Submitted
+                    @if (idea.createdAt; as createdAt) {
+                      {{ createdAt.toDate() | date: 'mediumDate' }}
+                    } @else {
+                      recently
+                    }
+                  </p>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+    }
+  </div>
+</main>
