@@ -26,7 +26,7 @@
       <h1 id="login-title">Log in</h1>
       <p class="auth-intro">Welcome back. Enter your details to continue.</p>
 
-      <form class="auth-form" (submit)="submit($event)">
+      <form class="auth-form" [formGroup]="form" (ngSubmit)="submit()">
         <div class="auth-field">
           <label for="login-email">Email address</label>
           <input
@@ -34,8 +34,16 @@
             type="email"
             autocomplete="email"
             placeholder="you@example.com"
+            formControlName="email"
             required
+            [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+            [attr.aria-describedby]="form.controls.email.touched && form.controls.email.invalid ? 'login-email-error' : null"
           />
+          @if (form.controls.email.touched && form.controls.email.hasError('required')) {
+            <span class="auth-error" id="login-email-error">Enter your email address.</span>
+          } @else if (form.controls.email.touched && form.controls.email.hasError('email')) {
+            <span class="auth-error" id="login-email-error">Enter a valid email address.</span>
+          }
         </div>
 
         <div class="auth-field">
@@ -48,16 +56,27 @@
             type="password"
             autocomplete="current-password"
             placeholder="Enter your password"
+            formControlName="password"
             required
+            [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+            [attr.aria-describedby]="form.controls.password.touched && form.controls.password.invalid ? 'login-password-error' : null"
           />
+          @if (form.controls.password.touched && form.controls.password.hasError('required')) {
+            <span class="auth-error" id="login-password-error">Enter your password.</span>
+          }
         </div>
 
-        <button class="auth-submit" type="submit">
+        <button
+          class="auth-submit"
+          type="submit"
+          [disabled]="isSubmitting()"
+          [attr.aria-busy]="isSubmitting()"
+        >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M15 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
             <path d="M10 12h10m-4-4 4 4-4 4" />
           </svg>
-          Log in
+          {{ isSubmitting() ? 'Logging in...' : 'Log in' }}
         </button>
       </form>
 
@@ -65,7 +84,6 @@
         New to Cedability?
         <a routerLink="/account/user/create-account">Create an account</a>
       </p>
-      <p class="auth-footnote">Account sign-in will be enabled when Firebase Authentication is connected.</p>
     </section>
   </div>
 </main>

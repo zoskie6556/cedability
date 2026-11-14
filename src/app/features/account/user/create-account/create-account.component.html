@@ -26,7 +26,7 @@
       <h1 id="signup-title">Create your account</h1>
       <p class="auth-intro">Join Cedability and bring your ideas to the table.</p>
 
-      <form class="auth-form" (submit)="submit($event)">
+      <form class="auth-form" [formGroup]="form" (ngSubmit)="submit()">
         <div class="auth-field">
           <label for="signup-name">Full name</label>
           <input
@@ -34,8 +34,15 @@
             type="text"
             autocomplete="name"
             placeholder="Your name"
-            required
+            formControlName="fullName"
+            [attr.aria-invalid]="form.controls.fullName.touched && form.controls.fullName.invalid"
+            [attr.aria-describedby]="form.controls.fullName.touched && form.controls.fullName.invalid ? 'signup-name-error' : null"
           />
+          @if (form.controls.fullName.touched && form.controls.fullName.hasError('required')) {
+            <span class="auth-error" id="signup-name-error">Enter your full name.</span>
+          } @else if (form.controls.fullName.touched && form.controls.fullName.hasError('pattern')) {
+            <span class="auth-error" id="signup-name-error">Enter a name that is not blank.</span>
+          }
         </div>
 
         <div class="auth-field">
@@ -45,8 +52,15 @@
             type="email"
             autocomplete="email"
             placeholder="you@example.com"
-            required
+            formControlName="email"
+            [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+            [attr.aria-describedby]="form.controls.email.touched && form.controls.email.invalid ? 'signup-email-error' : null"
           />
+          @if (form.controls.email.touched && form.controls.email.hasError('required')) {
+            <span class="auth-error" id="signup-email-error">Enter your email address.</span>
+          } @else if (form.controls.email.touched && form.controls.email.hasError('email')) {
+            <span class="auth-error" id="signup-email-error">Enter a valid email address.</span>
+          }
         </div>
 
         <div class="auth-field">
@@ -56,20 +70,31 @@
             type="password"
             autocomplete="new-password"
             placeholder="At least 8 characters"
-            minlength="8"
-            required
-            aria-describedby="signup-password-hint"
+            formControlName="password"
+            [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+            [attr.aria-describedby]="form.controls.password.touched && form.controls.password.invalid ? 'signup-password-error' : 'signup-password-hint'"
           />
-          <span class="auth-error" id="signup-password-hint">Use at least 8 characters.</span>
+          @if (form.controls.password.touched && form.controls.password.hasError('required')) {
+            <span class="auth-error" id="signup-password-error">Enter a password.</span>
+          } @else if (form.controls.password.touched && form.controls.password.hasError('minlength')) {
+            <span class="auth-error" id="signup-password-error">Use at least 8 characters.</span>
+          } @else {
+            <span class="auth-error" id="signup-password-hint">Use at least 8 characters.</span>
+          }
         </div>
 
-        <button class="auth-submit" type="submit">
+        <button
+          class="auth-submit"
+          type="submit"
+          [disabled]="isSubmitting()"
+          [attr.aria-busy]="isSubmitting()"
+        >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M15 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-4A4.5 4.5 0 0 0 2 18.5V20" />
             <circle cx="8.5" cy="7" r="4" />
             <path d="M19 8v8m-4-4h8" />
           </svg>
-          Create account
+          {{ isSubmitting() ? 'Creating account...' : 'Create account' }}
         </button>
       </form>
 
@@ -77,7 +102,7 @@
         Already have an account?
         <a routerLink="/account/user/login">Log in</a>
       </p>
-      <p class="auth-footnote">Account creation will be enabled when Firebase Authentication is connected.</p>
+      <p class="auth-footnote">Your account is securely managed by Firebase Authentication.</p>
     </section>
   </div>
 </main>
