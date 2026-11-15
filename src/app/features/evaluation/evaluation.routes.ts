@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { inject } from '@angular/core';
 import { FirebaseApp } from '@angular/fire/app';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
+import { roleGuard } from '../../core/guards/role.guard';
 import { AuthService } from '../../core/services/auth.service';
 import { UserDataService } from '../../core/services/user-data.service';
 
@@ -9,7 +10,8 @@ export const EVALUATION_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'review' },
   {
     path: 'review',
-    title: 'Evaluation',
+    title: 'Evaluator Dashboard',
+    canActivate: [roleGuard('evaluator')],
     providers: [
       provideFirestore(() => getFirestore(inject(FirebaseApp))),
       AuthService,

@@ -105,6 +105,15 @@ describe('App', () => {
     expect(voiceCommandLink?.getAttribute('href')).toBe('/accessibility');
   });
 
+  it('routes Dashboard through the authenticated role redirect', () => {
+    const fixture = createFixture();
+    const dashboardLink = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('nav[aria-label="Main navigation"] a'),
+    ).find((link) => link.textContent?.trim() === 'Dashboard');
+
+    expect(dashboardLink?.getAttribute('href')).toBe('/dashboard');
+  });
+
   it('shows Login and Sign Up when Firebase reports no authenticated user', () => {
     const fixture = createFixture();
     const actions = (fixture.nativeElement as HTMLElement).querySelector('.header-actions');

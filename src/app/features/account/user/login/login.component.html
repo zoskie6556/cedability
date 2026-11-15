@@ -25,6 +25,9 @@
       <p class="auth-eyebrow">Your Cedability space</p>
       <h1 id="login-title">Log in</h1>
       <p class="auth-intro">Welcome back. Enter your details to continue.</p>
+      @if (roleError()) {
+        <p class="auth-error role-error" role="alert">{{ roleError() }}</p>
+      }
 
       <form class="auth-form" [formGroup]="form" (ngSubmit)="submit()">
         <div class="auth-field">

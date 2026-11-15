@@ -1,0 +1,46 @@
+:host {
+  display: block;
+}
+
+.admin-dashboard {
+  display: grid;
+  min-height: 70vh;
+  place-items: center;
+  padding: clamp(1.25rem, 5vw, 4rem);
+  background:
+    radial-gradient(ellipse at 18% 18%, #ffe1b35c, transparent 34rem),
+    radial-gradient(ellipse at 84% 78%, #f6a77838, transparent 32rem),
+    #fffaf6;
+}
+
+.admin-dashboard-card {
+  width: min(100%, 780px);
+  padding: clamp(1.5rem, 5vw, 4rem);
+  border: 1px solid #eadfd8;
+  border-radius: 2rem;
+  background: linear-gradient(145deg, #fffdfaee, #fff4e8e8);
+  box-shadow: 0 24px 70px #4d211b1a;
+}
+
+.admin-dashboard-eyebrow {
+  margin: 0 0 0.75rem;
+  color: #a63a17;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.admin-dashboard-card h1 {
+  margin: 0;
+  color: #4d211b;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.admin-dashboard-card p:last-child {
+  max-width: 58ch;
+  margin: 1rem 0 0;
+  color: #6d625d;
+  font-size: 1.08rem;
+  line-height: 1.7;
+}

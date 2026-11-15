@@ -6,6 +6,12 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function isUser() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'user';
+    }
+
     function isEvaluator() {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -52,12 +58,13 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'profile',
           'updatedAt'
-        ]);
+        ])
+        && request.resource.data.role == resource.data.role;
       allow delete: if false;
     }
 
     match /ideas/{ideaId} {
-      allow create: if request.auth != null
+      allow create: if isUser()
         && request.resource.data.keys().hasAll([
           'ownerId',
           'ownerName',
@@ -228,6 +235,7 @@ service cloud.firestore {
           && request.resource.data.respondedBy == null
           && request.resource.data.respondedAt == null;
         allow update: if signedInAs(parentIdeaOwnerId())
+          && isUser()
           && resource.data.response == null
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'response',

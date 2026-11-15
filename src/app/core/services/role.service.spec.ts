@@ -1,113 +1,91 @@
 import { TestBed } from '@angular/core/testing';
-import { Auth, authState } from '@angular/fire/auth';
-import { IdTokenResult } from 'firebase/auth';
-import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { UserDataService } from './user-data.service';
+import { AuthService } from './auth.service';
 import { RoleService } from './role.service';
 
-const authMocks = vi.hoisted(() => ({
-  authState: vi.fn(),
-}));
-
-function createIdTokenResult(claims: IdTokenResult['claims']): IdTokenResult {
-  return {
-    authTime: '2026-11-15T00:00:00.000Z',
-    expirationTime: '2026-11-15T01:00:00.000Z',
-    issuedAtTime: '2026-11-15T00:00:00.000Z',
-    signInProvider: 'password',
-    signInSecondFactor: null,
-    token: 'test-id-token',
-    claims,
-  };
-}
-
-vi.mock('@angular/fire/auth', () => ({
-  Auth: class Auth {},
-  authState: authMocks.authState,
-}));
-
 describe('RoleService', () => {
-  const user = {
-    getIdTokenResult: vi.fn<(forceRefresh?: boolean) => Promise<IdTokenResult>>(),
+  const authUser = { uid: 'user-123' };
+  const authService = {
+    getCurrentUser: vi.fn<() => Promise<typeof authUser | null>>(),
+  };
+  const userDataService = {
+    getRoleRecord: vi.fn<(uid: string) => Promise<{ exists: boolean; role: unknown }>>(),
   };
   let roleService: RoleService;
 
   beforeEach(() => {
-    authMocks.authState.mockReset();
-    vi.mocked(user.getIdTokenResult).mockReset();
+    authService.getCurrentUser.mockReset().mockResolvedValue(authUser);
+    userDataService.getRoleRecord.mockReset();
 
     TestBed.configureTestingModule({
-      providers: [RoleService, { provide: Auth, useValue: {} }],
+      providers: [
+        RoleService,
+        { provide: AuthService, useValue: authService },
+        { provide: UserDataService, useValue: userDataService },
+      ],
     });
     roleService = TestBed.inject(RoleService);
   });
 
-  it('loads a recognized role from the authenticated user custom claims', async () => {
-    authMocks.authState.mockReturnValue(of(user));
-    vi.mocked(user.getIdTokenResult).mockResolvedValue(
-      createIdTokenResult({ role: 'evaluator' }),
-    );
+  it.each(['user', 'evaluator', 'admin'] as const)(
+    'loads the %s role from the protected user document',
+    async (role) => {
+      userDataService.getRoleRecord.mockResolvedValue({ exists: true, role });
 
-    await expect(roleService.loadCurrentRole()).resolves.toEqual({
-      status: 'assigned',
-      role: 'evaluator',
-    });
-    expect(user.getIdTokenResult).toHaveBeenCalledWith(false);
+      await expect(roleService.loadCurrentRole()).resolves.toEqual({
+        status: 'assigned',
+        role,
+      });
+      expect(userDataService.getRoleRecord).toHaveBeenCalledWith(authUser.uid);
+    },
+  );
+
+  it('gets the initialized current user from AuthService', async () => {
+    userDataService.getRoleRecord.mockResolvedValue({ exists: true, role: 'user' });
+
+    await roleService.loadCurrentRole();
+
+    expect(authService.getCurrentUser).toHaveBeenCalledOnce();
   });
 
-  it('reports an unauthenticated user without assigning a role', async () => {
-    authMocks.authState.mockReturnValue(of(null));
+  it('reports an unauthenticated user without reading a role', async () => {
+    authService.getCurrentUser.mockResolvedValue(null);
 
     await expect(roleService.loadCurrentRole()).resolves.toEqual({
       status: 'unauthenticated',
     });
-    expect(user.getIdTokenResult).not.toHaveBeenCalled();
+    expect(userDataService.getRoleRecord).not.toHaveBeenCalled();
   });
 
-  it('reports a missing role claim as unassigned', async () => {
-    authMocks.authState.mockReturnValue(of(user));
-    vi.mocked(user.getIdTokenResult).mockResolvedValue(createIdTokenResult({}));
+  it('reports a missing user document as unassigned', async () => {
+    userDataService.getRoleRecord.mockResolvedValue({ exists: false, role: undefined });
 
     await expect(roleService.loadCurrentRole()).resolves.toEqual({
       status: 'unassigned',
     });
   });
 
-  it('reports an unknown role claim as invalid', async () => {
-    authMocks.authState.mockReturnValue(of(user));
-    vi.mocked(user.getIdTokenResult).mockResolvedValue(
-      createIdTokenResult({ role: 'owner' }),
-    );
+  it('reports a missing role field as invalid', async () => {
+    userDataService.getRoleRecord.mockResolvedValue({ exists: true, role: undefined });
 
     await expect(roleService.loadCurrentRole()).resolves.toEqual({
       status: 'invalid',
     });
   });
 
-  it('does not hide custom-claim retrieval errors behind a default role', async () => {
-    const error = new Error('Token unavailable');
-    authMocks.authState.mockReturnValue(of(user));
-    vi.mocked(user.getIdTokenResult).mockRejectedValue(error);
+  it('reports an unknown role as invalid', async () => {
+    userDataService.getRoleRecord.mockResolvedValue({ exists: true, role: 'owner' });
+
+    await expect(roleService.loadCurrentRole()).resolves.toEqual({
+      status: 'invalid',
+    });
+  });
+
+  it('does not hide Firestore role lookup failures', async () => {
+    const error = new Error('Firestore unavailable');
+    userDataService.getRoleRecord.mockRejectedValue(error);
 
     await expect(roleService.loadCurrentRole()).rejects.toBe(error);
-  });
-
-  it('can force a custom-claim refresh', async () => {
-    authMocks.authState.mockReturnValue(of(user));
-    vi.mocked(user.getIdTokenResult).mockResolvedValue(
-      createIdTokenResult({ role: 'admin' }),
-    );
-
-    await roleService.loadCurrentRole(true);
-
-    expect(user.getIdTokenResult).toHaveBeenCalledWith(true);
-  });
-
-  it('uses the AngularFire authState observable', async () => {
-    authMocks.authState.mockReturnValue(of(null));
-
-    await roleService.loadCurrentRole();
-
-    expect(authState).toHaveBeenCalled();
   });
 });

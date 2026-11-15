@@ -285,7 +285,7 @@ describe('ProfileComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.skip-notice').textContent).toContain(
-      'no secure user dashboard route or persisted skip status',
+      'Complete your required profile steps before opening the User Dashboard',
     );
     expect(userDataService.saveProfile).not.toHaveBeenCalled();
     expect(user.profile.onboardingCompleted).toBe(false);

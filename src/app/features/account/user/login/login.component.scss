@@ -1,3 +1,13 @@
 :host {
   display: block;
 }
+
+.role-error {
+  margin: 0 0 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid #c53e13;
+  border-radius: 0.75rem;
+  background: #fff1e9;
+  color: #7f2910;
+  line-height: 1.5;
+}

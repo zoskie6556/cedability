@@ -3,6 +3,7 @@ import { inject } from '@angular/core';
 import { FirebaseApp } from '@angular/fire/app';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { authGuard } from '../../core/guards/auth.guard';
+import { roleGuard } from '../../core/guards/role.guard';
 import { AuthService } from '../../core/services/auth.service';
 import { UserDataService } from '../../core/services/user-data.service';
 
@@ -51,6 +52,15 @@ export const ACCOUNT_ROUTES: Routes = [
         path: 'profile',
         title: 'My profile',
         loadComponent: () => import('./profile/profile.component').then(m => m.ProfileComponent),
+      },
+      {
+        path: 'dashboard',
+        title: 'User Dashboard',
+        canActivate: [roleGuard('user')],
+        loadComponent: () =>
+          import('./user-dashboard/user-dashboard.component').then(
+            (m) => m.UserDashboardComponent,
+          ),
       },
     ],
   },
