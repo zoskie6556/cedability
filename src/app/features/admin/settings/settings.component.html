@@ -1,0 +1,15 @@
+<section class="page-shell">
+  <p class="eyebrow">System</p>
+  <h2>Settings</h2>
+  <p>Adjust operational defaults, chat schedules, and platform configuration.</p>
+
+  <div class="settings-list">
+    <article class="setting" *ngFor="let item of settings">
+      <div>
+        <h3>{{ item.name }}</h3>
+        <p>{{ item.description }}</p>
+      </div>
+      <span class="value">{{ item.value }}</span>
+    </article>
+  </div>
+</section>

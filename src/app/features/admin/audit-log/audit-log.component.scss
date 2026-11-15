@@ -1,0 +1,60 @@
+:host {
+  display: block;
+  color: var(--admin-text);
+  font-family: var(--admin-font-sans);
+}
+.page-shell {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow);
+  padding: 1.25rem;
+}
+.eyebrow {
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--admin-text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+h2 {
+  margin: 0 0 0.5rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1.25rem;
+}
+th,
+td {
+  padding: 0.8rem 0.75rem;
+  border-bottom: 1px solid var(--admin-border);
+  text-align: left;
+}
+th {
+  color: var(--admin-text-soft);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+.status {
+  display: inline-flex;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.status-success {
+  background: rgba(35, 168, 121, 0.12);
+  color: var(--admin-success);
+}
+.status-warning {
+  background: rgba(255, 172, 51, 0.12);
+  color: #9b6700;
+}
+.status-info {
+  background: rgba(31, 94, 255, 0.1);
+  color: var(--admin-primary-strong);
+}

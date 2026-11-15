@@ -461,7 +461,17 @@ function parseReviewFinding(value: unknown): AutomatedReviewFinding {
 }
 
 function requireUserRole(value: unknown): User['role'] {
-  if (value === 'user' || value === 'evaluator' || value === 'admin') {
+  if (value === 'user') {
+    return 'submitter';
+  }
+
+  if (
+    value === 'submitter' ||
+    value === 'evaluator' ||
+    value === 'adjudicator' ||
+    value === 'agent' ||
+    value === 'admin'
+  ) {
     return value;
   }
 

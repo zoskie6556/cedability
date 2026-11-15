@@ -1,0 +1,28 @@
+<section class="page-shell">
+  <p class="eyebrow">Compliance</p>
+  <h2>Audit log</h2>
+  <p>Inspect who changed what, when, and why across the admin workspace.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Actor</th>
+        <th>Action</th>
+        <th>Target</th>
+        <th>When</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let entry of auditEntries">
+        <td>{{ entry.actor }}</td>
+        <td>{{ entry.action }}</td>
+        <td>{{ entry.target }}</td>
+        <td>{{ entry.timestamp }}</td>
+        <td>
+          <span class="status status-{{ entry.status }}">{{ entry.status }}</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>

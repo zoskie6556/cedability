@@ -1,0 +1,15 @@
+<section class="page-shell">
+  <p class="eyebrow">Content</p>
+  <h2>Content</h2>
+  <p>Review FAQs, publish announcements, and keep the portal messaging current.</p>
+
+  <div class="content-list">
+    <article class="card" *ngFor="let item of contentItems">
+      <div class="header-row">
+        <strong>{{ item.title }}</strong>
+        <span class="status">{{ item.status }}</span>
+      </div>
+      <div class="meta">{{ item.type }} · Updated {{ item.updated }}</div>
+    </article>
+  </div>
+</section>

@@ -1,0 +1,88 @@
+<section class="page-header">
+  <div>
+    <p class="eyebrow">Operations</p>
+    <h2>Overview</h2>
+  </div>
+  <button type="button" class="primary-button">Export</button>
+</section>
+
+@if (error()) {
+  <p class="empty-state" role="alert">{{ error() }}</p>
+}
+
+<div class="stats-grid" [attr.aria-busy]="loading()">
+  @for (stat of stats(); track stat.label) {
+    <article class="stat-card">
+      <div class="stat-topline">
+        <span class="stat-label">{{ stat.label }}</span>
+        <span
+          class="stat-delta"
+          [class.up]="stat.status === 'up'"
+          [class.down]="stat.status === 'down'"
+        >
+          {{ stat.delta }}
+        </span>
+      </div>
+      <div class="stat-value">{{ stat.value }}</div>
+      <a [routerLink]="stat.route" class="stat-link">View details</a>
+    </article>
+  }
+</div>
+
+<div class="panel-grid">
+  <section class="panel">
+    <h3>Users by role</h3>
+    <div class="legend">
+      @for (item of roleBreakdown(); track item.label) {
+        <span><i class="dot" [style.background]="item.color"></i>{{ item.label }}</span>
+      }
+    </div>
+    <div class="donut-wrap" aria-label="Users by role summary">
+      <div class="donut-chart" [style.background]="donutGradient()">
+        <div class="donut-center">{{ totalUsers() }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Ideas by status</h3>
+    <ul class="bars">
+      @for (item of statusBreakdown(); track item.label) {
+        <li>
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <div class="bar"><i [style.width.%]="item.percent"></i></div>
+        </li>
+      }
+    </ul>
+  </section>
+
+  <section class="panel span-two">
+    <h3>Ideas per day</h3>
+    <div class="line-chart" aria-label="Ideas per day chart">
+      @if (ideasTrendPath()) {
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path [attr.d]="ideasTrendPath()" class="chart-path"></path>
+        </svg>
+      } @else {
+        <div class="empty-state">No daily idea data available yet.</div>
+      }
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Staff mix</h3>
+    @if (topStaff().length) {
+      <ol class="leaderboard">
+        @for (item of topStaff(); track item.label; let index = $index) {
+          <li>
+            <span>{{ index + 1 }}. {{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </li>
+        }
+      </ol>
+    } @else {
+      <p class="empty-state">No role data has been recorded yet.</p>
+    }
+  </section>
+</div>

@@ -1,0 +1,51 @@
+:host {
+  display: block;
+  color: var(--admin-text);
+  font-family: var(--admin-font-sans);
+}
+.page-shell {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow);
+  padding: 1.25rem;
+}
+.eyebrow {
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--admin-text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+h2 {
+  margin: 0 0 0.5rem;
+}
+.content-list {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.card {
+  background: var(--admin-surface-alt);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-md);
+  padding: 1rem;
+}
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.status {
+  background: rgba(31, 94, 255, 0.1);
+  color: var(--admin-primary-strong);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.meta {
+  color: var(--admin-text-soft);
+}

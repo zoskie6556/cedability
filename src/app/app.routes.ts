@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { adminGuard } from './core/guards/admin.guard';
 
 /**
  * Root routes for CEDAbility.
@@ -45,9 +46,14 @@ export const routes: Routes = [
     path: 'chat',
     loadChildren: () => import('./features/chat/chat.routes').then(m => m.CHAT_ROUTES),
   },
+  // {
+  //   path: 'admin',
+  //   canActivate: [adminGuard],
+  //   loadChildren: () => import('./features/admin/admin.routes').then(m => m.ADMIN_ROUTES),
+  // },
   {
     path: 'admin',
-    // TODO: add canActivate: [roleGuard('admin')]
+    // canActivate: [adminGuard],
     loadChildren: () => import('./features/admin/admin.routes').then(m => m.ADMIN_ROUTES),
   },
   {

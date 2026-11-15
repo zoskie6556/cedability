@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-<<<<<<< HEAD
     "module": "CommonJS",
     "moduleResolution": "Node",
     "target": "ES2022",
@@ -9,24 +8,8 @@
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts"]
-=======
-    "module": "NodeNext",
-    "esModuleInterop": true,
-    "moduleResolution": "nodenext",
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
-    "outDir": "lib",
-    "rootDir": "src",
-    "sourceMap": true,
-    "strict": true,
-    "target": "es2017"
-  },
-  "compileOnSave": true,
-  "include": [
-    "src"
-  ]
->>>>>>> feature/account-user
 }

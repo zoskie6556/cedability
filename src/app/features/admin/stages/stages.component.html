@@ -1,0 +1,15 @@
+<section class="page-shell">
+  <p class="eyebrow">Workflow</p>
+  <h2>Stages</h2>
+  <p>Configure the review lifecycle, thresholds, and adjudication requirements.</p>
+
+  <div class="stage-list">
+    <div class="stage-row" *ngFor="let stage of stageProgress">
+      <div class="row-header">
+        <span>{{ stage.name }}</span>
+        <strong>{{ stage.percent }}%</strong>
+      </div>
+      <div class="bar"><i [style.width.%]="stage.percent" [class]="stage.tone"></i></div>
+    </div>
+  </div>
+</section>

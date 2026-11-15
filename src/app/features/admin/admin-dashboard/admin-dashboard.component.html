@@ -1,1 +1,49 @@
-<p>admin-dashboard works!</p>
+<div class="admin-shell">
+  <aside class="admin-sidebar" aria-label="Admin navigation">
+    <div class="brand-block">
+      <div class="brand-mark">C</div>
+      <div>
+        <div class="brand-name">CEDAbility</div>
+        <div class="brand-subtitle">Admin</div>
+      </div>
+    </div>
+
+    <nav class="admin-nav">
+      <a
+        *ngFor="let item of navigation"
+        [routerLink]="item.path"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="nav-item"
+      >
+        <span class="nav-icon" aria-hidden="true" [innerHTML]="safeIcon(item.icon)"></span>
+        <span>{{ item.label }}</span>
+      </a>
+    </nav>
+  </aside>
+
+  <div class="admin-main">
+    <header class="admin-topbar" aria-label="Admin toolbar">
+      <div class="page-title-wrap">
+        <button class="icon-button" type="button" aria-label="Menu">☰</button>
+        <h1>Dashboard</h1>
+      </div>
+
+      <div class="topbar-actions">
+        <label class="search-field" aria-label="Search">
+          <span aria-hidden="true">⌕</span>
+          <input type="search" placeholder="Search" />
+        </label>
+        <button class="icon-button" type="button" aria-label="Notifications">🔔</button>
+        <button class="user-pill" type="button" aria-label="Account menu">
+          <span class="avatar">A</span>
+          <span>Admin</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="admin-content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

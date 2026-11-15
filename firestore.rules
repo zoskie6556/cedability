@@ -1,16 +1,34 @@
+// ===============================================================
+// Assumed Data Model
+// users/{uid}: private account fields, role and profile map. Clients create
+// submitter records and may update only validated profile fields; admins can
+// read user records for the admin user-management workflow.
+// ideas/{ideaId}: one submitted idea with ownerId, plans, timestamps and a
+// server-managed automatedReview map. Clients cannot update or delete ideas.
+// ideas/{ideaId}/questions/{questionId}: evaluator question and owner response.
+// stats/{docId}: server-written aggregates. auditLogs/{logId}: server-written
+// audit events. Admin SDK writes bypass these client rules.
+// ===============================================================
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-<<<<<<< HEAD
     function signedInAs(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    function isEvaluator() {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    function isUser() {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['evaluator', 'admin'];
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['user', 'submitter'];
+    }
+
+    function isEvaluator() {
+      return request.auth != null && request.auth.token.role in ['evaluator', 'adjudicator', 'admin'];
     }
 
     function canReadIdea(ownerId) {
@@ -18,11 +36,171 @@ service cloud.firestore {
         && (request.auth.uid == ownerId || isEvaluator());
     }
 
-    match /users/{userId} {
-      allow get: if signedInAs(userId);
-      allow list: if false;
-      allow create: if signedInAs(userId)
-        && request.resource.data.keys().hasAll([
+    function isBoundedString(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    function isValidCost(cost) {
+      return cost is map
+        && cost.keys().hasAll(['item', 'amount', 'description'])
+        && cost.keys().hasOnly(['item', 'amount', 'description'])
+        && isBoundedString(cost.item, 120)
+        && cost.item.size() > 0
+        && cost.amount is number
+        && cost.amount >= 0
+        && isBoundedString(cost.description, 1000);
+    }
+
+    function isValidCosts(costs) {
+      return costs is list
+        && costs.size() <= 10
+        && (costs.size() < 1 || isValidCost(costs[0]))
+        && (costs.size() < 2 || isValidCost(costs[1]))
+        && (costs.size() < 3 || isValidCost(costs[2]))
+        && (costs.size() < 4 || isValidCost(costs[3]))
+        && (costs.size() < 5 || isValidCost(costs[4]))
+        && (costs.size() < 6 || isValidCost(costs[5]))
+        && (costs.size() < 7 || isValidCost(costs[6]))
+        && (costs.size() < 8 || isValidCost(costs[7]))
+        && (costs.size() < 9 || isValidCost(costs[8]))
+        && (costs.size() < 10 || isValidCost(costs[9]));
+    }
+
+    function isValidMilestone(milestone) {
+      return milestone is map
+        && milestone.keys().hasAll(['title', 'targetDate', 'successMeasure', 'estimatedCost'])
+        && milestone.keys().hasOnly(['title', 'targetDate', 'successMeasure', 'estimatedCost'])
+        && isBoundedString(milestone.title, 120)
+        && milestone.title.size() > 0
+        && isBoundedString(milestone.targetDate, 40)
+        && isBoundedString(milestone.successMeasure, 1000)
+        && (milestone.estimatedCost == null ||
+          (milestone.estimatedCost is number && milestone.estimatedCost >= 0));
+    }
+
+    function isValidMilestones(milestones) {
+      return milestones is list
+        && milestones.size() <= 10
+        && (milestones.size() < 1 || isValidMilestone(milestones[0]))
+        && (milestones.size() < 2 || isValidMilestone(milestones[1]))
+        && (milestones.size() < 3 || isValidMilestone(milestones[2]))
+        && (milestones.size() < 4 || isValidMilestone(milestones[3]))
+        && (milestones.size() < 5 || isValidMilestone(milestones[4]))
+        && (milestones.size() < 6 || isValidMilestone(milestones[5]))
+        && (milestones.size() < 7 || isValidMilestone(milestones[6]))
+        && (milestones.size() < 8 || isValidMilestone(milestones[7]))
+        && (milestones.size() < 9 || isValidMilestone(milestones[8]))
+        && (milestones.size() < 10 || isValidMilestone(milestones[9]));
+    }
+
+    function isValidIdea() {
+      return request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerName is string
+        && request.resource.data.ownerName.size() <= 120
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.problem is string
+        && request.resource.data.problem.size() <= 5000
+        && request.resource.data.proposedSolution is string
+        && request.resource.data.proposedSolution.size() <= 5000
+        && request.resource.data.intendedBeneficiaries is string
+        && request.resource.data.intendedBeneficiaries.size() <= 2000
+        && request.resource.data.plannedLocation is string
+        && request.resource.data.plannedLocation.size() <= 200
+        && request.resource.data.aiAnalysisConsent is bool
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidNewQuestion() {
+      return request.resource.data.keys().hasAll([
+          'askedBy',
+          'question',
+          'createdAt',
+          'response',
+          'respondedBy',
+          'respondedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'askedBy',
+          'question',
+          'createdAt',
+          'response',
+          'respondedBy',
+          'respondedAt'
+        ])
+        && request.resource.data.askedBy == request.auth.uid
+        && isBoundedString(request.resource.data.question, 2000)
+        && request.resource.data.question.size() > 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.response == null
+        && request.resource.data.respondedBy == null
+        && request.resource.data.respondedAt == null;
+    }
+
+    function isValidQuestionResponse() {
+      return resource.data.response == null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'response',
+          'respondedBy',
+          'respondedAt'
+        ])
+        && isBoundedString(request.resource.data.response, 5000)
+        && request.resource.data.response.size() > 0
+        && request.resource.data.respondedBy == request.auth.uid
+        && request.resource.data.respondedAt == request.time;
+    }
+
+    function isValidProfile(profile) {
+      return profile is map
+        && profile.keys().hasAll([
+          'userType',
+          'profession',
+          'purpose',
+          'plannedLocation',
+          'goals',
+          'address',
+          'contacts',
+          'passwordLastSetAt',
+          'onboardingCompleted',
+          'onboardingCompletedAt'
+        ])
+        && profile.keys().hasOnly([
+          'userType',
+          'profession',
+          'purpose',
+          'plannedLocation',
+          'goals',
+          'address',
+          'contacts',
+          'passwordLastSetAt',
+          'onboardingCompleted',
+          'onboardingCompletedAt'
+        ])
+        && profile.userType in ['individual', 'organization']
+        && profile.profession is string && profile.profession.size() <= 200
+        && profile.purpose is string && profile.purpose.size() <= 2000
+        && profile.plannedLocation is string && profile.plannedLocation.size() <= 200
+        && profile.goals is string && profile.goals.size() <= 2000
+        && profile.address is map
+        && profile.address.keys().hasAll(['plotNumber', 'boxNumber', 'location'])
+        && profile.address.keys().hasOnly(['plotNumber', 'boxNumber', 'location'])
+        && profile.address.plotNumber is string && profile.address.plotNumber.size() <= 100
+        && profile.address.boxNumber is string && profile.address.boxNumber.size() <= 100
+        && profile.address.location is string && profile.address.location.size() <= 200
+        && profile.contacts is map
+        && profile.contacts.keys().hasAll(['phoneNumber'])
+        && profile.contacts.keys().hasOnly(['phoneNumber'])
+        && profile.contacts.phoneNumber is string && profile.contacts.phoneNumber.size() <= 30
+        && (profile.passwordLastSetAt == null || profile.passwordLastSetAt is timestamp)
+        && profile.onboardingCompleted is bool
+        && (profile.onboardingCompletedAt == null || profile.onboardingCompletedAt is timestamp);
+    }
+
+    function isValidUser(userId) {
+      return request.resource.data.keys().hasAll([
           'uid',
           'email',
           'fullName',
@@ -45,20 +223,51 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 320
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() <= 120
+        && request.resource.data.emailVerified is bool
+        && request.resource.data.phoneNumberVerified is bool
+        && request.resource.data.role in ['user', 'submitter']
+        && isValidProfile(request.resource.data.profile)
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if signedInAs(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if signedInAs(userId)
+        && isValidUser(userId)
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.emailVerified == request.auth.token.email_verified
         && request.resource.data.phoneNumberVerified == false
-        && request.resource.data.role == 'user';
+        && request.resource.data.role in ['user', 'submitter']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
       allow update: if signedInAs(userId)
+        && isValidUser(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'profile',
           'updatedAt'
-        ]);
+        ])
+        && request.resource.data.profile.passwordLastSetAt ==
+          resource.data.profile.passwordLastSetAt
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.fullName == resource.data.fullName
+        && request.resource.data.emailVerified == resource.data.emailVerified
+        && request.resource.data.phoneNumberVerified == resource.data.phoneNumberVerified
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
 
     match /ideas/{ideaId} {
-      allow create: if request.auth != null
+      allow create: if isUser()
+        && isValidIdea()
         && request.resource.data.keys().hasAll([
           'ownerId',
           'ownerName',
@@ -97,8 +306,6 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.status == 'submitted'
         && request.resource.data.aiAnalysisConsent == true
         && request.resource.data.aiAnalysisConsentAt == request.time
         && request.resource.data.marketPlan is map
@@ -114,6 +321,10 @@ service cloud.firestore {
           'differentiation',
           'marketValidation'
         ])
+        && isBoundedString(request.resource.data.marketPlan.targetMarket, 3000)
+        && isBoundedString(request.resource.data.marketPlan.alternatives, 3000)
+        && isBoundedString(request.resource.data.marketPlan.differentiation, 3000)
+        && isBoundedString(request.resource.data.marketPlan.marketValidation, 3000)
         && request.resource.data.feasibilityPlan is map
         && request.resource.data.feasibilityPlan.keys().hasAll([
           'technicalApproach',
@@ -129,6 +340,11 @@ service cloud.firestore {
           'assumptions',
           'risks'
         ])
+        && isBoundedString(request.resource.data.feasibilityPlan.technicalApproach, 3000)
+        && isBoundedString(request.resource.data.feasibilityPlan.operationalPlan, 3000)
+        && isBoundedString(request.resource.data.feasibilityPlan.validationEvidence, 3000)
+        && isBoundedString(request.resource.data.feasibilityPlan.assumptions, 3000)
+        && isBoundedString(request.resource.data.feasibilityPlan.risks, 3000)
         && request.resource.data.financingPlan is map
         && request.resource.data.financingPlan.keys().hasAll([
           'currency',
@@ -142,11 +358,13 @@ service cloud.firestore {
           'fundingSources',
           'costs'
         ])
+        && isBoundedString(request.resource.data.financingPlan.currency, 10)
+        && isBoundedString(request.resource.data.financingPlan.fundingSources, 3000)
         && request.resource.data.financingPlan.totalFundingNeeded is number
         && request.resource.data.financingPlan.totalFundingNeeded > 0
-        && request.resource.data.financingPlan.costs is list
+        && isValidCosts(request.resource.data.financingPlan.costs)
         && request.resource.data.financingPlan.costs.size() > 0
-        && request.resource.data.milestones is list
+        && isValidMilestones(request.resource.data.milestones)
         && request.resource.data.milestones.size() > 0
         && request.resource.data.automatedReview is map
         && request.resource.data.automatedReview.keys().hasAll([
@@ -204,61 +422,27 @@ service cloud.firestore {
         allow get, list: if canReadIdea(parentIdeaOwnerId());
         allow create: if parentIdeaExists()
           && isEvaluator()
-          && request.resource.data.keys().hasAll([
-            'askedBy',
-            'question',
-            'createdAt',
-            'response',
-            'respondedBy',
-            'respondedAt'
-          ])
-          && request.resource.data.keys().hasOnly([
-            'askedBy',
-            'question',
-            'createdAt',
-            'response',
-            'respondedBy',
-            'respondedAt'
-          ])
-          && request.resource.data.askedBy == request.auth.uid
-          && request.resource.data.question is string
-          && request.resource.data.question.size() > 0
-          && request.resource.data.question.size() <= 2000
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.response == null
-          && request.resource.data.respondedBy == null
-          && request.resource.data.respondedAt == null;
+          && isValidNewQuestion();
         allow update: if signedInAs(parentIdeaOwnerId())
-          && resource.data.response == null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'response',
-            'respondedBy',
-            'respondedAt'
-          ])
-          && request.resource.data.response is string
-          && request.resource.data.response.size() > 0
-          && request.resource.data.response.size() <= 5000
-          && request.resource.data.respondedBy == request.auth.uid
-          && request.resource.data.respondedAt == request.time;
+          && isUser()
+          && isValidQuestionResponse();
         allow delete: if false;
       }
     }
-  }
-}
-=======
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
+    match /stats/{docId} {
+      allow get, list: if isAdmin()
+        || (request.auth != null && request.auth.token.role == 'adjudicator');
+      allow create, update, delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 12, 14);
+      allow read, write: if false;
     }
   }
 }
->>>>>>> feature/account-user

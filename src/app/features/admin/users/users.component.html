@@ -1,0 +1,145 @@
+<section class="page-header">
+  <div>
+    <p class="eyebrow">Administration</p>
+    <h2>User management</h2>
+  </div>
+  <button type="button" class="primary-button" (click)="focusCreateForm()">Create account</button>
+</section>
+
+<div class="toolbar">
+  <label class="search-field" aria-label="Search users">
+    <span aria-hidden="true">⌕</span>
+    <input
+      type="search"
+      placeholder="Search by name or email"
+      [value]="searchTerm()"
+      (input)="onSearchChange($event)"
+    />
+  </label>
+
+  <select
+    class="chip-select"
+    aria-label="Filter by role"
+    [value]="roleFilter()"
+    (change)="onRoleFilterChange($event)"
+  >
+    <option value="all">All roles</option>
+    <option value="admin">Admin</option>
+    <option value="evaluator">Evaluator</option>
+    <option value="adjudicator">Adjudicator</option>
+    <option value="agent">Support team</option>
+    <option value="submitter">Submitter</option>
+  </select>
+</div>
+
+@if (isLoading()) {
+  <app-idea-loader label="Loading users" />
+} @else {
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Verified</th>
+          <th>Created</th>
+          <th>Last active</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of filteredUsers(); track user.id) {
+          <tr>
+            <td>{{ user.name }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.phone ?? '—' }}</td>
+            <td>
+              <label class="inline-role-picker">
+                <span class="sr-only">Change role for {{ user.name }}</span>
+                <select
+                  [value]="user.role"
+                  (change)="changeUserRole($event, user)"
+                  [attr.aria-label]="'Change role for ' + user.name"
+                >
+                  <option value="submitter">User</option>
+                  <option value="evaluator">Evaluator</option>
+                  <option value="adjudicator">Adjudicator</option>
+                  <option value="agent">Support Team</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+            </td>
+            <td>
+              <span class="status-pill" [class.disabled]="user.status === 'disabled'">{{
+                user.status
+              }}</span>
+            </td>
+            <td>{{ user.emailVerified ? 'Yes' : 'No' }}</td>
+            <td>{{ user.createdAt }}</td>
+            <td>{{ user.lastActive }}</td>
+            <td>
+              <div class="action-stack">
+                <button type="button" class="row-button" (click)="toggleStatus(user)">
+                  {{ user.status === 'active' ? 'Disable' : 'Enable' }}
+                </button>
+                <button type="button" class="row-button" (click)="resendInvite(user)">
+                  Resend invite
+                </button>
+                <button type="button" class="row-button danger" (click)="deleteUser(user)">
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="9" class="empty-state">No users match the current filters.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<section class="panel create-panel" aria-labelledby="create-user-title">
+  <h3 id="create-user-title">Create user</h3>
+
+  <form [formGroup]="form" (ngSubmit)="createUser()" class="user-form">
+    <div class="field-row">
+      <label>
+        <span>Display name</span>
+        <input formControlName="name" type="text" placeholder="Jane Doe" />
+      </label>
+
+      <label>
+        <span>Email</span>
+        <input formControlName="email" type="email" placeholder="jane@example.org" />
+      </label>
+    </div>
+
+    <div class="field-row">
+      <label>
+        <span>Phone</span>
+        <input formControlName="phone" type="tel" placeholder="+26771234567" />
+      </label>
+
+      <label>
+        <span>Role</span>
+        <select formControlName="role">
+          <option value="submitter">User</option>
+          <option value="evaluator">Evaluator</option>
+          <option value="adjudicator">Adjudicator</option>
+          <option value="agent">Support Team</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="primary-button">Create</button>
+    </div>
+  </form>
+</section>

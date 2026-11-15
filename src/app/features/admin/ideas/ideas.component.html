@@ -1,0 +1,16 @@
+<section class="page-shell">
+  <p class="eyebrow">Innovation</p>
+  <h2>Ideas</h2>
+  <p>Review submissions, assign evaluators, and manage workflow progress.</p>
+
+  <div class="idea-list">
+    <article class="idea-card" *ngFor="let idea of ideaPipeline">
+      <div class="title-row">
+        <strong>{{ idea.title }}</strong>
+        <span class="score">{{ idea.score }}</span>
+      </div>
+      <div class="meta">Owner: {{ idea.owner }}</div>
+      <div class="stage">Stage: {{ idea.stage }}</div>
+    </article>
+  </div>
+</section>

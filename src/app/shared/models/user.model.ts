@@ -1,7 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { Profile } from './profile.model';
 
-export type UserRole = 'user' | 'evaluator' | 'admin';
+export type UserRole = `submitter` | `evaluator` | `adjudicator` | `admin` | `agent`;
 
 export interface User {
   uid: string;
