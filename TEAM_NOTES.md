@@ -44,19 +44,6 @@ Each feature has its own routes file: `features/<name>/<name>.routes.ts`.
 5. Don't reformat files you didn't change. Use the shared Prettier config.
 6. Colours, fonts and the app name are **design tokens** (CSS variables), never hardcoded. CEDA will give us their branding.
 
-## Git workflow
-
-```bash
-git checkout main && git pull
-git checkout -b feature/<your-feature>-<short-task>     # e.g. feature/account-login
-# ...work, commit small and often...
-git pull origin main --rebase                           # do this daily
-npx ng build                                            # must pass before a PR
-git push -u origin feature/<your-feature>-<short-task>
-```
-
-Open a pull request into `main`. Another team member reviews it. Never push directly to `main`.
-
 ## Definition of done for a page
 
 - Works with the Firebase **emulator**, not the shared live project

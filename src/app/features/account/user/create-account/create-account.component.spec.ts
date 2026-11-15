@@ -106,7 +106,7 @@ describe('CreateAccountComponent', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
-  it('explains that the account exists when its Firestore user record cannot be saved', async () => {
+  it('explains that the account exists when its user record cannot be saved', async () => {
     authService.register.mockRejectedValue(new AccountFirestoreWriteError(new Error('offline')));
     const fixture = createFixture();
     setInput(fixture, '#signup-name', 'Casey Example');
