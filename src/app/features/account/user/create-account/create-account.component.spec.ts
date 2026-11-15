@@ -2,7 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { FirebaseError } from 'firebase/app';
 import { provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthService } from '../../../../core/services/auth.service';
+import {
+  AccountFirestoreWriteError,
+  AuthService,
+} from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { CreateAccountComponent } from './create-account.component';
 
@@ -101,5 +104,22 @@ describe('CreateAccountComponent', () => {
       'An account with this email already exists. Try logging in.',
     );
     expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('explains that the account exists when its Firestore user record cannot be saved', async () => {
+    authService.register.mockRejectedValue(new AccountFirestoreWriteError(new Error('offline')));
+    const fixture = createFixture();
+    setInput(fixture, '#signup-name', 'Casey Example');
+    setInput(fixture, '#signup-email', 'casey@example.com');
+    setInput(fixture, '#signup-password', 'password123');
+
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+
+    expect(toastService.error).toHaveBeenCalledWith(
+      'Your account was created, but we could not save your user record. Please do not register again; contact support for help.',
+    );
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/account/user/profile');
   });
 });
