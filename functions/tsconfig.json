@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+<<<<<<< HEAD
     "module": "CommonJS",
     "moduleResolution": "Node",
     "target": "ES2022",
@@ -11,4 +12,21 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts"]
+=======
+    "module": "NodeNext",
+    "esModuleInterop": true,
+    "moduleResolution": "nodenext",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
+    "rootDir": "src",
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017"
+  },
+  "compileOnSave": true,
+  "include": [
+    "src"
+  ]
+>>>>>>> feature/account-user
 }
