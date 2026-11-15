@@ -4,6 +4,7 @@ import { doc, Firestore, serverTimestamp, setDoc } from '@angular/fire/firestore
 import { serverTimestamp as createServerTimestamp } from 'firebase/firestore';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountFirestoreWriteError, AuthService } from './auth.service';
+import { UserDataService } from './user-data.service';
 
 const firestoreMocks = vi.hoisted(() => ({
   createUserWithEmailAndPassword: vi.fn(),
@@ -54,6 +55,7 @@ describe('AuthService', () => {
     TestBed.configureTestingModule({
       providers: [
         AuthService,
+        UserDataService,
         { provide: Auth, useValue: {} },
         { provide: Firestore, useValue: {} },
       ],
@@ -68,11 +70,32 @@ describe('AuthService', () => {
     expect(setDoc).toHaveBeenCalledWith(userReference, {
       uid: 'user-123',
       email: 'casey@example.com',
+      fullName: 'Casey Example',
       emailVerified: false,
-      mobileVerified: false,
+      phoneNumberVerified: false,
+      role: 'user',
+      profile: {
+        userType: 'individual',
+        profession: '',
+        purpose: '',
+        plannedLocation: '',
+        goals: '',
+        address: {
+          plotNumber: '',
+          boxNumber: '',
+          location: '',
+        },
+        contacts: {
+          phoneNumber: '',
+        },
+        passwordLastSetAt: null,
+        onboardingCompleted: false,
+        onboardingCompletedAt: null,
+      },
       createdAt: timestamp,
+      updatedAt: timestamp,
     });
-    expect(serverTimestamp).toHaveBeenCalledOnce();
+    expect(serverTimestamp).toHaveBeenCalledTimes(2);
     expect(updateProfile).toHaveBeenCalledWith(user, { displayName: 'Casey Example' });
   });
 

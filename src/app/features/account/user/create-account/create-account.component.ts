@@ -3,15 +3,9 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FirebaseError } from 'firebase/app';
 import { Router, RouterLink } from '@angular/router';
 import {
-<<<<<<< HEAD
-  AccountProfileUpdateError,
-  AuthService,
-  UserDocumentCreationError,
-=======
   AccountFirestoreWriteError,
   AccountProfileUpdateError,
   AuthService,
->>>>>>> a360f6d5602f1461d424417cc72d0ce3dc33f0ff
 } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 
@@ -55,15 +49,9 @@ export class CreateAccountComponent {
       this.toastService.success('Your account has been created.');
       await this.router.navigateByUrl('/account/user/profile');
     } catch (error: unknown) {
-<<<<<<< HEAD
-      if (error instanceof UserDocumentCreationError) {
-        this.toastService.error(
-          'Your account was created, but we could not save its user record. We will retry when your profile opens.',
-=======
       if (error instanceof AccountFirestoreWriteError) {
         this.toastService.error(
           'Your account was created, but we could not save your user record. Please do not register again; contact support for help.',
->>>>>>> a360f6d5602f1461d424417cc72d0ce3dc33f0ff
         );
         await this.router.navigateByUrl('/account/user/profile');
       } else if (error instanceof AccountProfileUpdateError) {
