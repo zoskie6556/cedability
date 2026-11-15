@@ -194,6 +194,18 @@
   background: #f7ece4;
 }
 
+.header-logout {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.header-logout:disabled {
+  opacity: 0.7;
+  cursor: wait;
+  transform: none;
+}
+
 .menu-toggle {
   display: none;
   width: 44px;
@@ -260,8 +272,9 @@
   .main-nav {
     order: 3;
     width: 100%;
-    justify-content: space-between;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    overflow: visible;
     gap: 1.2rem;
   }
 

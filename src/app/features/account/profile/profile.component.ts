@@ -1,15 +1,17 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   inject,
   OnInit,
   signal,
   ViewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
@@ -27,6 +29,8 @@ import type { User } from '../../../shared/models/user.model';
 })
 export class ProfileComponent implements OnInit {
   private readonly authService = inject(AuthService);
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
@@ -66,7 +70,13 @@ export class ProfileComponent implements OnInit {
   @ViewChild('editProfileButton') private editProfileButton?: ElementRef<HTMLButtonElement>;
   @ViewChild('editProfileHeading') private editProfileHeading?: ElementRef<HTMLHeadingElement>;
   @ViewChild('deleteAccountButton') private deleteAccountButton?: ElementRef<HTMLButtonElement>;
-  @ViewChild('deleteAccountDialog') private deleteAccountDialog?: ElementRef<HTMLDialogElement>;
+  private deleteAccountDialogElement?: ElementRef<HTMLDialogElement>;
+  private pendingDeleteAccountDialog = false;
+  @ViewChild('deleteAccountDialog')
+  set deleteAccountDialog(element: ElementRef<HTMLDialogElement> | undefined) {
+    this.deleteAccountDialogElement = element;
+    this.openPendingDeleteAccountDialog();
+  }
   private pendingOnboardingStep: number | null = null;
 
   protected readonly form = this.formBuilder.nonNullable.group({
@@ -82,6 +92,12 @@ export class ProfileComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.activatedRoute.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        this.pendingDeleteAccountDialog = params.get('openDeleteAccount') === 'true';
+        this.openPendingDeleteAccountDialog();
+      });
     void this.loadProfile();
   }
 
@@ -274,7 +290,7 @@ export class ProfileComponent implements OnInit {
   }
 
   protected openDeleteAccountDialog(): void {
-    const dialog = this.deleteAccountDialog?.nativeElement;
+    const dialog = this.deleteAccountDialogElement?.nativeElement;
     if (!dialog || dialog.open) {
       return;
     }
@@ -304,7 +320,7 @@ export class ProfileComponent implements OnInit {
   }
 
   protected cancelDeletion(): void {
-    const dialog = this.deleteAccountDialog?.nativeElement;
+    const dialog = this.deleteAccountDialogElement?.nativeElement;
     if (dialog?.open) {
       dialog.close();
     }
@@ -313,6 +329,7 @@ export class ProfileComponent implements OnInit {
     this.deletionConfirmed.set(false);
     this.deletionUnavailableMessage.set(null);
     this.deletionStatusMessage.set(message);
+    this.clearDeleteAccountQueryParameter();
     this.toastService.info(message);
     queueMicrotask(() => this.deleteAccountButton?.nativeElement.focus());
   }
@@ -320,6 +337,37 @@ export class ProfileComponent implements OnInit {
   protected handleDeletionDialogCancel(event: Event): void {
     event.preventDefault();
     this.cancelDeletion();
+  }
+
+  private openPendingDeleteAccountDialog(): void {
+    if (!this.pendingDeleteAccountDialog || !this.deleteAccountDialogElement) {
+      return;
+    }
+
+    this.pendingDeleteAccountDialog = false;
+    queueMicrotask(() => this.openDeleteAccountDialog());
+  }
+
+  private clearDeleteAccountQueryParameter(): void {
+    if (!this.activatedRoute.snapshot.queryParamMap.has('openDeleteAccount')) {
+      return;
+    }
+
+    void this.router
+      .navigate([], {
+        relativeTo: this.activatedRoute,
+        queryParams: { openDeleteAccount: null },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      })
+      .then((navigated) => {
+        if (!navigated) {
+          this.toastService.error('The account deletion dialog closed, but the page URL could not be updated.');
+        }
+      })
+      .catch(() => {
+        this.toastService.error('The account deletion dialog closed, but the page URL could not be updated.');
+      });
   }
 
   protected continueOnboarding(): void {

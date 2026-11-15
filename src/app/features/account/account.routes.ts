@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { inject } from '@angular/core';
 import { FirebaseApp } from '@angular/fire/app';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
+import { authGuard } from '../../core/guards/auth.guard';
 import { AuthService } from '../../core/services/auth.service';
 import { UserDataService } from '../../core/services/user-data.service';
 
@@ -32,6 +33,13 @@ export const ACCOUNT_ROUTES: Routes = [
         title: 'Forgot password',
         loadComponent: () =>
           import('./user/forgot-password/forgot-password.component').then(m => m.ForgotPasswordComponent),
+      },
+      {
+        path: 'change-password',
+        title: 'Change password',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./user/change-password/change-password.component').then(m => m.ChangePasswordComponent),
       },
       {
         path: 'verify',

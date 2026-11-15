@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -8,6 +9,7 @@ import type { User } from '../../../shared/models/user.model';
 import { ProfileComponent } from './profile.component';
 
 describe('ProfileComponent', () => {
+  let queryParamMap: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
   const authService = {
     getCurrentUser: vi.fn(),
     signOut: vi.fn(),
@@ -52,6 +54,7 @@ describe('ProfileComponent', () => {
   };
 
   beforeEach(async () => {
+    queryParamMap = new BehaviorSubject(convertToParamMap({}));
     authService.getCurrentUser.mockReset();
     toastService.success.mockReset();
     toastService.error.mockReset();
@@ -74,6 +77,13 @@ describe('ProfileComponent', () => {
       imports: [ProfileComponent],
       providers: [
         provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            queryParamMap: queryParamMap.asObservable(),
+            snapshot: { queryParamMap: convertToParamMap({}) },
+          },
+        },
         { provide: AuthService, useValue: authService },
         { provide: ToastService, useValue: toastService },
         { provide: UserDataService, useValue: userDataService },
@@ -466,6 +476,22 @@ describe('ProfileComponent', () => {
     expect(userDataService.saveProfile).not.toHaveBeenCalled();
     expect(authService.signOut).not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('Welcome, Casey Example');
+  });
+
+  it('opens the existing non-destructive deletion dialog from the profile route query', async () => {
+    const fixture = await createCompletedFixture();
+    const dialog = prepareDeleteDialog(fixture);
+
+    queryParamMap.next(convertToParamMap({ openDeleteAccount: 'true' }));
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(dialog.open).toBe(true);
+    });
+
+    expect(dialog.textContent).toContain('Deletion is currently unavailable');
+    expect(dialog.textContent).toContain('no deletion will be attempted here');
+    expect(authService.signOut).not.toHaveBeenCalled();
+    expect(userDataService.saveProfile).not.toHaveBeenCalled();
   });
 
   it('requires explicit acknowledgement and never claims or attempts deletion without an approved policy', async () => {
