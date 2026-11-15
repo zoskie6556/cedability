@@ -1,5 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { Auth, createUserWithEmailAndPassword, updateProfile } from '@angular/fire/auth';
+import {
+  Auth,
+  createUserWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from '@angular/fire/auth';
 import { doc, Firestore, serverTimestamp, setDoc } from '@angular/fire/firestore';
 import { serverTimestamp as createServerTimestamp } from 'firebase/firestore';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +13,7 @@ import { UserDataService } from './user-data.service';
 
 const firestoreMocks = vi.hoisted(() => ({
   createUserWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
   updateProfile: vi.fn(),
   doc: vi.fn(),
   serverTimestamp: vi.fn(),
@@ -18,6 +24,7 @@ vi.mock('@angular/fire/auth', () => ({
   Auth: class Auth {},
   createUserWithEmailAndPassword: firestoreMocks.createUserWithEmailAndPassword,
   signInWithEmailAndPassword: vi.fn(),
+  signOut: firestoreMocks.signOut,
   updateProfile: firestoreMocks.updateProfile,
 }));
 
@@ -35,11 +42,13 @@ describe('AuthService', () => {
     emailVerified: false,
   };
   const userReference = { path: 'users/user-123' };
+  const authInstance = {};
   const timestamp = createServerTimestamp();
   let authService: AuthService;
 
   beforeEach(() => {
     vi.mocked(createUserWithEmailAndPassword).mockReset();
+    vi.mocked(signOut).mockReset();
     vi.mocked(updateProfile).mockReset();
     vi.mocked(doc).mockReset();
     vi.mocked(serverTimestamp).mockReset();
@@ -56,7 +65,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         UserDataService,
-        { provide: Auth, useValue: {} },
+        { provide: Auth, useValue: authInstance },
         { provide: Firestore, useValue: {} },
       ],
     });
@@ -110,5 +119,20 @@ describe('AuthService', () => {
       originalError: writeError,
     });
     expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('signs out the current Firebase Authentication user', async () => {
+    vi.mocked(signOut).mockResolvedValue();
+
+    await authService.signOut();
+
+    expect(signOut).toHaveBeenCalledWith(authInstance);
+  });
+
+  it('propagates Firebase sign-out failures to the caller', async () => {
+    const signOutError = new Error('Firebase is unavailable');
+    vi.mocked(signOut).mockRejectedValue(signOutError);
+
+    await expect(authService.signOut()).rejects.toBe(signOutError);
   });
 });

@@ -3,6 +3,7 @@ import {
   Auth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
   updateProfile,
   User,
   UserCredential,
@@ -32,6 +33,10 @@ export class AuthService {
 
   signIn(email: string, password: string): Promise<UserCredential> {
     return signInWithEmailAndPassword(this.auth, email, password);
+  }
+
+  signOut(): Promise<void> {
+    return firebaseSignOut(this.auth);
   }
 
   async getCurrentUser(): Promise<User | null> {
