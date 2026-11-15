@@ -1,4 +1,10 @@
-<main id="main-content" class="profile-page">
+<main
+  id="main-content"
+  class="profile-page"
+  [class.onboarding-splash]="user()?.profile?.onboardingCompleted === false"
+  [class.home-page]="user()?.profile?.onboardingCompleted === false"
+  [class.auth-page]="user()?.profile?.onboardingCompleted === false"
+>
   <div class="profile-shell">
     @if (isLoading()) {
       <section class="page-state" role="status" aria-live="polite">
@@ -7,218 +13,570 @@
       </section>
     } @else if (!hasSignedInUser()) {
       <section class="page-state" aria-labelledby="signed-out-title">
-        <p class="eyebrow">Your Cedability space</p>
+        <p class="auth-eyebrow">Your Cedability space</p>
         <h1 id="signed-out-title">Log in to view your profile</h1>
         <p>Your profile and submitted ideas are available after you sign in.</p>
-        <a class="button-primary" routerLink="/account/user/login">Log in</a>
+        @if (logoutError(); as error) {
+          <p class="auth-error" role="alert">{{ error }}</p>
+        }
+        <a class="auth-submit" routerLink="/account/user/login">Log in</a>
       </section>
     } @else if (loadError() && !user()) {
       <section class="page-state" role="alert" aria-labelledby="profile-error-title">
-        <p class="eyebrow">Profile unavailable</p>
+        <p class="auth-eyebrow">Profile unavailable</p>
         <h1 id="profile-error-title">We couldn’t open your profile</h1>
         <p>{{ loadError() }}</p>
-        <button class="button-primary" type="button" (click)="loadProfile()">Try again</button>
+        <button class="auth-submit" type="button" (click)="loadProfile()">Try again</button>
       </section>
     } @else if (user(); as account) {
       @if (!account.profile.onboardingCompleted) {
-        <div class="onboarding-layout">
-          <aside class="onboarding-intro" aria-labelledby="welcome-title">
-            <p class="eyebrow">Welcome to Cedability</p>
-            <h1 id="welcome-title">Your ideas can grow from here, {{ account.fullName }}.</h1>
-            <p>
-              Cedability helps you shape ideas, share them with a community, and get them evaluated
-              so promising projects can move forward.
+        <div class="onboarding-shell">
+          <header class="onboarding-topbar">
+            <a class="auth-brand splash-brand" routerLink="/" aria-label="CEDAbility home">
+              <span class="auth-brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 40 40" fill="none">
+                  <path d="M20 3.5 34 11.6v16.8L20 36.5 6 28.4V11.6L20 3.5Z" />
+                  <path d="M25.8 14.5a8 8 0 1 0 0 11" />
+                  <path d="m22.5 20 3.1 3.1 6-7" />
+                </svg>
+              </span>
+              <span>CEDA<span>bility</span></span>
+            </a>
+            <button
+              class="button-secondary skip-button"
+              type="button"
+              (click)="showDashboardUnavailableNotice()"
+            >
+              Skip for now
+              <span aria-hidden="true">↗</span>
+            </button>
+          </header>
+
+          @if (showDashboardNotice()) {
+            <p class="auth-footnote skip-notice" role="status" aria-live="polite">
+              Complete your required profile steps before opening the User Dashboard. Your profile
+              remains incomplete and your answers are not saved until you finish.
             </p>
-            <ul class="benefit-list">
-              <li>Turn a local need into a clear idea.</li>
-              <li>Share your plan and the people it can help.</li>
-              <li>Keep track of your submissions as they grow.</li>
-            </ul>
-          </aside>
+          }
 
-          <section class="onboarding-card" aria-labelledby="onboarding-title">
-            <p class="eyebrow">A quick introduction</p>
-            <h2 id="onboarding-title">Let’s get to know you</h2>
-            <p class="onboarding-caption">
-              A few details will help us understand your goals and support future idea evaluations.
-            </p>
+          <div class="onboarding-stage">
+            <section class="splash-story" aria-labelledby="splash-title">
+              <p class="auth-eyebrow">
+                Your Cedability journey
+              </p>
+              <h1 id="splash-title">
+                Every great idea begins with <span>a spark.</span>
+              </h1>
+              <p class="auth-intro splash-description">
+                Tell us what moves you. One small step at a time, your idea or entrepreneurial
+                venture can find its path to opportunity.
+              </p>
 
-            <div class="chat-thread" aria-label="Cedability onboarding conversation">
-              <article class="chat-message assistant-message">
-                <span class="message-author">Cedability guide</span>
-                <p>
-                  What do you do, what would you like to create, and where do you hope to make it
-                  happen?
-                </p>
-              </article>
-              <article class="chat-message assistant-message">
-                <span class="message-author">A note from us</span>
-                <p>
-                  Your answers stay on your profile. You can add ideas after this introduction.
-                  Fields marked optional can be completed later.
-                </p>
-              </article>
-            </div>
-
-            <form class="onboarding-form" [formGroup]="form" (ngSubmit)="saveOnboarding()">
-              <div class="form-field">
-                <label for="profile-user-type">I am joining as</label>
-                <select id="profile-user-type" formControlName="userType">
-                  <option value="individual">An individual</option>
-                  <option value="organization">An organization</option>
-                </select>
-              </div>
-
-              <div class="form-field">
-                <label for="profile-profession">What is your profession or area of work?</label>
-                <input
-                  id="profile-profession"
-                  type="text"
-                  autocomplete="organization-title"
-                  formControlName="profession"
-                  [attr.aria-invalid]="form.controls.profession.touched && form.controls.profession.invalid"
-                  [attr.aria-describedby]="form.controls.profession.touched && form.controls.profession.invalid ? 'profile-profession-error' : null"
-                />
-                @if (form.controls.profession.touched && form.controls.profession.invalid) {
-                  <span class="field-error" id="profile-profession-error">Tell us your profession or area of work.</span>
-                }
-              </div>
-
-              <div class="form-field">
-                <label for="profile-purpose">What are you here to create or achieve?</label>
-                <textarea
-                  id="profile-purpose"
-                  rows="3"
-                  formControlName="purpose"
-                  [attr.aria-invalid]="form.controls.purpose.touched && form.controls.purpose.invalid"
-                  [attr.aria-describedby]="form.controls.purpose.touched && form.controls.purpose.invalid ? 'profile-purpose-error' : null"
-                ></textarea>
-                @if (form.controls.purpose.touched && form.controls.purpose.invalid) {
-                  <span class="field-error" id="profile-purpose-error">Tell us what you hope to create or achieve.</span>
-                }
-              </div>
-
-              <div class="form-field">
-                <label for="profile-location">Where do you plan to do it?</label>
-                <input
-                  id="profile-location"
-                  type="text"
-                  autocomplete="address-level2"
-                  formControlName="plannedLocation"
-                  [attr.aria-invalid]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid"
-                  [attr.aria-describedby]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid ? 'profile-location-error' : null"
-                />
-                @if (form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid) {
-                  <span class="field-error" id="profile-location-error">Add the place or community where you plan to work.</span>
-                }
-              </div>
-
-              <div class="form-field">
-                <label for="profile-goals">What are your goals?</label>
-                <textarea
-                  id="profile-goals"
-                  rows="3"
-                  formControlName="goals"
-                  [attr.aria-invalid]="form.controls.goals.touched && form.controls.goals.invalid"
-                  [attr.aria-describedby]="form.controls.goals.touched && form.controls.goals.invalid ? 'profile-goals-error' : null"
-                ></textarea>
-                @if (form.controls.goals.touched && form.controls.goals.invalid) {
-                  <span class="field-error" id="profile-goals-error">Share at least one goal you would like to work toward.</span>
-                }
-              </div>
-
-              <fieldset class="optional-fields">
-                <legend>Optional contact and address details</legend>
-                <div class="form-field">
-                  <label for="profile-phone">Phone number</label>
-                  <input id="profile-phone" type="tel" autocomplete="tel" formControlName="phoneNumber" />
-                  <span class="field-hint">Your phone number will remain unverified until verification is added.</span>
+              <div class="hero-art" aria-hidden="true">
+                <div class="art-orbit orbit-one"></div>
+                <div class="art-orbit orbit-two"></div>
+                <div class="art-leaf leaf-one"></div>
+                <div class="art-leaf leaf-two"></div>
+                <div class="spark-card">
+                  <span class="spark-icon">
+                    <svg viewBox="0 0 36 36" fill="none">
+                      <path d="M18 4v4m0 20v4M4 18h4m20 0h4M8.1 8.1l2.8 2.8m14.2 14.2 2.8 2.8m0-19.8-2.8 2.8m-14.2 14.2-2.8 2.8" />
+                      <circle cx="18" cy="18" r="7" />
+                    </svg>
+                  </span>
+                  <span class="spark-copy">
+                    <strong>Every idea starts somewhere</strong>
+                    <small>It starts with you.</small>
+                  </span>
+                  <span class="spark-arrow" aria-hidden="true">↗</span>
                 </div>
-                <div class="address-fields">
-                  <div class="form-field">
-                    <label for="profile-plot-number">Plot number</label>
-                    <input id="profile-plot-number" type="text" formControlName="plotNumber" />
-                  </div>
-                  <div class="form-field">
-                    <label for="profile-box-number">P.O. box number</label>
-                    <input id="profile-box-number" type="text" formControlName="boxNumber" />
-                  </div>
-                  <div class="form-field address-location">
-                    <label for="profile-address-location">Town or location</label>
-                    <input id="profile-address-location" type="text" formControlName="addressLocation" />
-                  </div>
+                <div class="idea-node node-one"><span>01</span><strong>Imagine</strong></div>
+                <div class="idea-node node-two"><span>02</span><strong>Include</strong></div>
+                <div class="idea-node node-three"><span>03</span><strong>Grow</strong></div>
+                <div class="art-center">
+                  <div class="center-ring"></div>
+                  <svg viewBox="0 0 120 120" fill="none">
+                    <path d="M60 14 99 36.5v45L60 104 21 81.5v-45L60 14Z" />
+                    <path d="M75.3 44.4a22.3 22.3 0 1 0 0 31.2" />
+                    <path d="m66.8 60 8.7 8.7 16.8-19.3" />
+                    <circle cx="60" cy="60" r="35.5" />
+                  </svg>
+                  <span class="center-caption">Your ability<br />to innovate</span>
                 </div>
-              </fieldset>
+                <div class="art-caption"><span></span>Ideas grow when everyone can take part</div>
+              </div>
+            </section>
 
-              @if (loadError()) {
-                <p class="form-error" role="alert">{{ loadError() }}</p>
+            <form
+              class="auth-card auth-form onboarding-step-card question-card"
+              [formGroup]="form"
+              (ngSubmit)="continueOnboarding()"
+              [attr.aria-labelledby]="'onboarding-step-title-' + activeOnboardingStep()"
+              [attr.aria-busy]="isSaving()"
+              [attr.data-phase]="onboardingCardPhase()"
+              (animationend)="handleOnboardingCardAnimationEnd($event)"
+              novalidate
+            >
+              <div class="section-heading question-progress">
+                <div>
+                  <p class="auth-eyebrow">A quick introduction</p>
+                  <p class="step-count">Step {{ activeOnboardingStep() + 1 }} of {{ onboardingStepLabels.length }}</p>
+                </div>
+                <span aria-live="polite">{{ onboardingStepLabels[activeOnboardingStep()] }}</span>
+              </div>
+              <progress
+                [value]="activeOnboardingStep() + 1"
+                [max]="onboardingStepLabels.length"
+                aria-label="Onboarding progress"
+              ></progress>
+
+              @switch (activeOnboardingStep()) {
+                @case (0) {
+                  <h2 id="onboarding-step-title-0" #stepHeading tabindex="-1">How are you joining?</h2>
+                  <p class="step-prompt">Choose the option that best describes you.</p>
+                  <div class="auth-field">
+                    <label for="profile-user-type">I am joining as</label>
+                    <select id="profile-user-type" formControlName="userType">
+                      <option value="individual">An individual</option>
+                      <option value="organization">An organization</option>
+                    </select>
+                  </div>
+                }
+                @case (1) {
+                  <h2 id="onboarding-step-title-1" #stepHeading tabindex="-1">What do you do?</h2>
+                  <p class="step-prompt">Tell us about your profession or area of work.</p>
+                  <div class="auth-field">
+                    <label for="profile-profession">Profession or area of work</label>
+                    <input
+                      id="profile-profession"
+                      type="text"
+                      autocomplete="organization-title"
+                      formControlName="profession"
+                      [attr.aria-invalid]="form.controls.profession.touched && form.controls.profession.invalid"
+                      [attr.aria-describedby]="form.controls.profession.touched && form.controls.profession.invalid ? 'profile-profession-error' : null"
+                    />
+                    @if (form.controls.profession.touched && form.controls.profession.invalid) {
+                      <span class="auth-error" id="profile-profession-error">Tell us your profession or area of work.</span>
+                    }
+                  </div>
+                }
+                @case (2) {
+                  <h2 id="onboarding-step-title-2" #stepHeading tabindex="-1">What would you like to achieve?</h2>
+                  <p class="step-prompt">Describe what you are here to create or accomplish.</p>
+                  <div class="auth-field">
+                    <label for="profile-purpose">What are you here to create or achieve?</label>
+                    <textarea
+                      id="profile-purpose"
+                      rows="3"
+                      formControlName="purpose"
+                      [attr.aria-invalid]="form.controls.purpose.touched && form.controls.purpose.invalid"
+                      [attr.aria-describedby]="form.controls.purpose.touched && form.controls.purpose.invalid ? 'profile-purpose-error' : null"
+                    ></textarea>
+                    @if (form.controls.purpose.touched && form.controls.purpose.invalid) {
+                      <span class="auth-error" id="profile-purpose-error">Tell us what you hope to create or achieve.</span>
+                    }
+                  </div>
+                }
+                @case (3) {
+                  <h2 id="onboarding-step-title-3" #stepHeading tabindex="-1">Where will you make it happen?</h2>
+                  <p class="step-prompt">Add the place or community where you plan to work.</p>
+                  <div class="auth-field">
+                    <label for="profile-location">Planned location</label>
+                    <input
+                      id="profile-location"
+                      type="text"
+                      autocomplete="address-level2"
+                      formControlName="plannedLocation"
+                      [attr.aria-invalid]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid"
+                      [attr.aria-describedby]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid ? 'profile-location-error' : null"
+                    />
+                    @if (form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid) {
+                      <span class="auth-error" id="profile-location-error">Add the place or community where you plan to work.</span>
+                    }
+                  </div>
+                }
+                @case (4) {
+                  <h2 id="onboarding-step-title-4" #stepHeading tabindex="-1">What are your goals?</h2>
+                  <p class="step-prompt">Share at least one goal you would like to work toward.</p>
+                  <div class="auth-field">
+                    <label for="profile-goals">Your goals</label>
+                    <textarea
+                      id="profile-goals"
+                      rows="3"
+                      formControlName="goals"
+                      [attr.aria-invalid]="form.controls.goals.touched && form.controls.goals.invalid"
+                      [attr.aria-describedby]="form.controls.goals.touched && form.controls.goals.invalid ? 'profile-goals-error' : null"
+                    ></textarea>
+                    @if (form.controls.goals.touched && form.controls.goals.invalid) {
+                      <span class="auth-error" id="profile-goals-error">Share at least one goal you would like to work toward.</span>
+                    }
+                  </div>
+                }
+                @case (5) {
+                  <h2 id="onboarding-step-title-5" #stepHeading tabindex="-1">Anything else to add?</h2>
+                  <p class="step-prompt">These contact and address details are optional.</p>
+                  <fieldset class="optional-fields">
+                    <legend>Optional contact and address details</legend>
+                    <div class="auth-field">
+                      <label for="profile-phone">Phone number</label>
+                      <input id="profile-phone" type="tel" autocomplete="tel" formControlName="phoneNumber" />
+                      <span class="field-hint">Your phone number will remain unverified until verification is added.</span>
+                    </div>
+                    <div class="address-fields">
+                      <div class="auth-field">
+                        <label for="profile-plot-number">Plot number</label>
+                        <input id="profile-plot-number" type="text" formControlName="plotNumber" />
+                      </div>
+                      <div class="auth-field">
+                        <label for="profile-box-number">P.O. box number</label>
+                        <input id="profile-box-number" type="text" formControlName="boxNumber" />
+                      </div>
+                      <div class="auth-field address-location">
+                        <label for="profile-address-location">Town or location</label>
+                        <input id="profile-address-location" type="text" formControlName="addressLocation" />
+                      </div>
+                    </div>
+                  </fieldset>
+                }
               }
 
-              <button
-                class="button-primary save-button"
-                type="submit"
-                [disabled]="isSaving()"
-                [attr.aria-busy]="isSaving()"
-              >
-                {{ isSaving() ? 'Saving your profile...' : 'Save and continue' }}
-              </button>
+              @if (loadError()) {
+                <p class="auth-error" role="alert">{{ loadError() }}</p>
+              }
+
+              <div class="step-actions">
+                <button
+                  class="button-secondary back-button"
+                  type="button"
+                  (click)="goBackOnboarding()"
+                  [disabled]="activeOnboardingStep() === 0 || onboardingCardPhase() === 'exiting' || isSaving()"
+                >
+                  Back
+                </button>
+                <button
+                  class="auth-submit continue-button"
+                  type="submit"
+                  [disabled]="onboardingCardPhase() === 'exiting' || isSaving()"
+                  [attr.aria-busy]="isSaving()"
+                >
+                  @if (isSaving()) {
+                    Saving your profile...
+                  } @else if (activeOnboardingStep() === onboardingStepLabels.length - 1) {
+                    Save and continue
+                  } @else {
+                    Continue
+                  }
+                </button>
+              </div>
             </form>
-          </section>
+          </div>
         </div>
       } @else {
         <header class="profile-heading">
           <div>
-            <p class="eyebrow">Your Cedability space</p>
+            <p class="auth-eyebrow">Your Cedability space</p>
             <h1>Welcome, {{ account.fullName }}</h1>
             <p>Keep your goals close and follow the ideas you’ve shared.</p>
           </div>
-          <a class="button-primary" routerLink="/submissions/idea">Submit an idea</a>
+          <div class="step-actions profile-header-actions">
+            <button
+              #editProfileButton
+              class="button-secondary edit-profile-button"
+              type="button"
+              [disabled]="isEditingProfile() || isSaving()"
+              [attr.aria-expanded]="isEditingProfile()"
+              (click)="startEditingProfile()"
+            >
+              Edit Profile
+            </button>
+            <button
+              class="button-secondary logout-button"
+              type="button"
+              [disabled]="isLoggingOut() || isSaving()"
+              [attr.aria-busy]="isLoggingOut()"
+              (click)="logOut()"
+            >
+              {{ isLoggingOut() ? 'Logging out...' : 'Log Out' }}
+            </button>
+            <a class="auth-submit" routerLink="/submissions/idea">Submit an idea</a>
+          </div>
         </header>
 
-        <section class="profile-card" aria-labelledby="profile-details-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Your introduction</p>
-              <h2 id="profile-details-title">Profile details</h2>
+        @if (logoutError(); as error) {
+          <p class="auth-error" role="alert">{{ error }}</p>
+        }
+        @if (profileSaveMessage(); as message) {
+          <p class="auth-footnote profile-feedback" role="status">{{ message }}</p>
+        }
+
+        @if (isEditingProfile()) {
+          <form
+            id="profile-edit-form"
+            class="profile-card auth-form"
+            [formGroup]="form"
+            (ngSubmit)="saveProfileChanges()"
+            [attr.aria-labelledby]="'edit-profile-title'"
+            [attr.aria-busy]="isSaving()"
+            novalidate
+          >
+            <div class="section-heading">
+              <div>
+                <p class="auth-eyebrow">Your introduction</p>
+                <h2 id="edit-profile-title" #editProfileHeading tabindex="-1">Edit profile</h2>
+              </div>
             </div>
-          </div>
-          <dl class="profile-details">
-            <div><dt>Email</dt><dd>{{ account.email }}</dd></div>
-            <div><dt>Profession</dt><dd>{{ account.profile.profession }}</dd></div>
-            <div><dt>Here to</dt><dd>{{ account.profile.purpose }}</dd></div>
-            <div><dt>Planned location</dt><dd>{{ account.profile.plannedLocation }}</dd></div>
-            <div><dt>Goals</dt><dd>{{ account.profile.goals }}</dd></div>
-            <div><dt>Phone</dt><dd>{{ account.profile.contacts.phoneNumber || 'Not added' }}</dd></div>
-            <div>
-              <dt>Email verification</dt>
-              <dd>{{ account.emailVerified ? 'Verified' : 'Not verified' }}</dd>
+
+            <dl class="profile-details profile-identity" aria-label="Read-only account information">
+              <div><dt>Account name</dt><dd>{{ account.fullName }}</dd></div>
+              <div><dt>Email</dt><dd>{{ account.email }}</dd></div>
+            </dl>
+
+            <div class="auth-field">
+              <label for="profile-user-type">User type</label>
+              <select
+                id="profile-user-type"
+                formControlName="userType"
+                required
+                [attr.aria-invalid]="form.controls.userType.touched && form.controls.userType.invalid"
+                [attr.aria-describedby]="form.controls.userType.touched && form.controls.userType.invalid ? 'profile-user-type-error' : null"
+              >
+                <option value="individual">An individual</option>
+                <option value="organization">An organization</option>
+              </select>
+              @if (form.controls.userType.touched && form.controls.userType.invalid) {
+                <span class="auth-error" id="profile-user-type-error">Choose an account type.</span>
+              }
             </div>
-            <div>
-              <dt>Phone verification</dt>
-              <dd>{{ account.phoneNumberVerified ? 'Verified' : 'Not verified' }}</dd>
+
+            <div class="auth-field">
+              <label for="profile-profession">Profession or area of work</label>
+              <input
+                id="profile-profession"
+                type="text"
+                autocomplete="organization-title"
+                formControlName="profession"
+                required
+                [attr.aria-invalid]="form.controls.profession.touched && form.controls.profession.invalid"
+                [attr.aria-describedby]="form.controls.profession.touched && form.controls.profession.invalid ? 'profile-profession-error' : null"
+              />
+              @if (form.controls.profession.touched && form.controls.profession.invalid) {
+                <span class="auth-error" id="profile-profession-error">Tell us your profession or area of work.</span>
+              }
             </div>
-            <div class="address-detail">
-              <dt>Address</dt>
-              <dd>
-                {{ account.profile.address.plotNumber || '—' }},
-                {{ account.profile.address.boxNumber || '—' }},
-                {{ account.profile.address.location || '—' }}
-              </dd>
+
+            <div class="auth-field">
+              <label for="profile-purpose">Purpose</label>
+              <textarea
+                id="profile-purpose"
+                rows="3"
+                formControlName="purpose"
+                required
+                [attr.aria-invalid]="form.controls.purpose.touched && form.controls.purpose.invalid"
+                [attr.aria-describedby]="form.controls.purpose.touched && form.controls.purpose.invalid ? 'profile-purpose-error' : null"
+              ></textarea>
+              @if (form.controls.purpose.touched && form.controls.purpose.invalid) {
+                <span class="auth-error" id="profile-purpose-error">Tell us what you hope to create or achieve.</span>
+              }
             </div>
-          </dl>
-        </section>
+
+            <div class="auth-field">
+              <label for="profile-location">Planned location</label>
+              <input
+                id="profile-location"
+                type="text"
+                autocomplete="address-level2"
+                formControlName="plannedLocation"
+                required
+                [attr.aria-invalid]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid"
+                [attr.aria-describedby]="form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid ? 'profile-location-error' : null"
+              />
+              @if (form.controls.plannedLocation.touched && form.controls.plannedLocation.invalid) {
+                <span class="auth-error" id="profile-location-error">Add the place or community where you plan to work.</span>
+              }
+            </div>
+
+            <div class="auth-field">
+              <label for="profile-goals">Goals</label>
+              <textarea
+                id="profile-goals"
+                rows="3"
+                formControlName="goals"
+                required
+                [attr.aria-invalid]="form.controls.goals.touched && form.controls.goals.invalid"
+                [attr.aria-describedby]="form.controls.goals.touched && form.controls.goals.invalid ? 'profile-goals-error' : null"
+              ></textarea>
+              @if (form.controls.goals.touched && form.controls.goals.invalid) {
+                <span class="auth-error" id="profile-goals-error">Share at least one goal you would like to work toward.</span>
+              }
+            </div>
+
+            <fieldset class="optional-fields">
+              <legend>Optional contact and address details</legend>
+              <div class="auth-field">
+                <label for="profile-phone">Phone number</label>
+                <input id="profile-phone" type="tel" autocomplete="tel" formControlName="phoneNumber" />
+                <span class="field-hint">Your phone number will remain unverified until verification is added.</span>
+              </div>
+              <div class="address-fields">
+                <div class="auth-field">
+                  <label for="profile-plot-number">Plot number</label>
+                  <input id="profile-plot-number" type="text" formControlName="plotNumber" />
+                </div>
+                <div class="auth-field">
+                  <label for="profile-box-number">P.O. box number</label>
+                  <input id="profile-box-number" type="text" formControlName="boxNumber" />
+                </div>
+                <div class="auth-field address-location">
+                  <label for="profile-address-location">Town or location</label>
+                  <input id="profile-address-location" type="text" formControlName="addressLocation" />
+                </div>
+              </div>
+            </fieldset>
+
+            @if (profileSaveError(); as error) {
+              <p class="auth-error" role="alert">{{ error }}</p>
+            }
+
+            <div class="step-actions">
+              <button
+                class="button-secondary cancel-profile-button"
+                type="button"
+                [disabled]="isSaving()"
+                (click)="cancelProfileEdit()"
+              >
+                Cancel
+              </button>
+              <button
+                class="auth-submit save-profile-button"
+                type="submit"
+                [disabled]="isSaving()"
+                [attr.aria-busy]="isSaving()"
+              >
+                {{ isSaving() ? 'Saving changes...' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
+        } @else {
+          <section class="profile-card" aria-labelledby="profile-details-title">
+            <div class="section-heading">
+              <div>
+                <p class="auth-eyebrow">Your introduction</p>
+                <h2 id="profile-details-title">Profile details</h2>
+              </div>
+            </div>
+            <dl class="profile-details">
+              <div><dt>Email</dt><dd>{{ account.email }}</dd></div>
+              <div><dt>Profession</dt><dd>{{ account.profile.profession }}</dd></div>
+              <div><dt>Here to</dt><dd>{{ account.profile.purpose }}</dd></div>
+              <div><dt>Planned location</dt><dd>{{ account.profile.plannedLocation }}</dd></div>
+              <div><dt>Goals</dt><dd>{{ account.profile.goals }}</dd></div>
+              <div><dt>Phone</dt><dd>{{ account.profile.contacts.phoneNumber || 'Not added' }}</dd></div>
+              <div>
+                <dt>Email verification</dt>
+                <dd>{{ account.emailVerified ? 'Verified' : 'Not verified' }}</dd>
+              </div>
+              <div>
+                <dt>Phone verification</dt>
+                <dd>{{ account.phoneNumberVerified ? 'Verified' : 'Not verified' }}</dd>
+              </div>
+              <div class="address-detail">
+                <dt>Address</dt>
+                <dd>
+                  {{ account.profile.address.plotNumber || '—' }},
+                  {{ account.profile.address.boxNumber || '—' }},
+                  {{ account.profile.address.location || '—' }}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="profile-card" aria-labelledby="danger-zone-title">
+            <div class="section-heading">
+              <div>
+                <p class="auth-eyebrow">Account settings</p>
+                <h2 id="danger-zone-title">Danger Zone</h2>
+              </div>
+            </div>
+            <p>Deleting your account permanently closes it and removes your personal profile information.</p>
+            <p class="auth-error">
+              Account deletion is not available until the data-retention policy for shared evaluator
+              activity, audit records, and any stored files is approved.
+            </p>
+            @if (deletionStatusMessage(); as message) {
+              <p class="auth-footnote" role="status">{{ message }}</p>
+            }
+            <button
+              #deleteAccountButton
+              class="button-secondary delete-account-button"
+              type="button"
+              (click)="openDeleteAccountDialog()"
+            >
+              Delete Account
+            </button>
+          </section>
+
+          <dialog
+            #deleteAccountDialog
+            id="delete-account-dialog"
+            class="profile-card"
+            aria-labelledby="delete-account-title"
+            aria-describedby="delete-account-description"
+            aria-modal="true"
+            (cancel)="handleDeletionDialogCancel($event)"
+          >
+            <h2 id="delete-account-title">Confirm account deletion</h2>
+            <p id="delete-account-description">
+              This will permanently close your account and delete your personal profile information.
+              Your user-owned ideas and their related records may also be deleted according to the
+              approved data-retention policy. This action cannot be undone.
+            </p>
+            <p class="auth-error" role="note">
+              Deletion is currently unavailable. The policy for evaluator activity, audit records,
+              and stored files must be approved first; no deletion will be attempted here.
+            </p>
+            @if (deletionUnavailableMessage(); as message) {
+              <p class="auth-error" role="alert" aria-live="assertive">{{ message }}</p>
+            }
+            <label for="delete-account-confirmation">
+              <input
+                id="delete-account-confirmation"
+                type="checkbox"
+                [checked]="deletionConfirmed()"
+                (change)="setDeletionConfirmation($event)"
+              />
+              I understand this action cannot be undone.
+            </label>
+            <div class="step-actions">
+              <button
+                class="button-secondary cancel-deletion-button"
+                type="button"
+                (click)="cancelDeletion()"
+              >
+                Cancel
+              </button>
+              <button
+                class="auth-submit confirm-deletion-button"
+                type="button"
+                [disabled]="!deletionConfirmed()"
+                (click)="confirmDeletionIntent()"
+              >
+                Confirm intent
+              </button>
+            </div>
+          </dialog>
+        }
 
         <section class="ideas-section" aria-labelledby="ideas-title">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Your work in progress</p>
+              <p class="auth-eyebrow">Your work in progress</p>
               <h2 id="ideas-title">Your ideas</h2>
             </div>
             <a class="text-link" routerLink="/submissions/idea">Submit another idea</a>
           </div>
 
           @if (ideasError()) {
-            <p class="form-error" role="alert">{{ ideasError() }}</p>
+            <p class="auth-error" role="alert">{{ ideasError() }}</p>
             <button class="text-button" type="button" (click)="loadProfile()">Try loading again</button>
           } @else if (ideas().length === 0) {
             <div class="empty-ideas">
@@ -284,6 +642,7 @@
                         </article>
                       }
                     </section>
+
                   }
                   <p class="idea-date">
                     Submitted

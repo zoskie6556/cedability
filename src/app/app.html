@@ -14,21 +14,23 @@
     </a>
 
     <div class="header-actions">
-      <a class="header-login" routerLink="/account/user/login" aria-label="Log in">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M15 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
-          <path d="M10 12h10m-4-4 4 4-4 4" />
-        </svg>
-        <span>Log in</span>
-      </a>
-      <a class="header-signup" routerLink="/account/user/create-account" aria-label="Sign up">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M15 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-4A4.5 4.5 0 0 0 2 18.5V20" />
-          <circle cx="8.5" cy="7" r="4" />
-          <path d="M19 8v8m-4-4h8" />
-        </svg>
-        <span>Sign up</span>
-      </a>
+      @if (authStateReady() && !authUser()) {
+        <a class="header-login" routerLink="/account/user/login" aria-label="Log in">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
+            <path d="M10 12h10m-4-4 4 4-4 4" />
+          </svg>
+          <span>Log in</span>
+        </a>
+        <a class="header-signup" routerLink="/account/user/create-account" aria-label="Sign up">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-4A4.5 4.5 0 0 0 2 18.5V20" />
+            <circle cx="8.5" cy="7" r="4" />
+            <path d="M19 8v8m-4-4h8" />
+          </svg>
+          <span>Sign up</span>
+        </a>
+      }
       <button
         class="menu-toggle"
         type="button"
@@ -82,14 +84,87 @@
         </svg>
         Submissions
       </a>
-      <a routerLink="/account/user/profile" routerLinkActive="active" ariaCurrentWhenActive="page">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21a8 8 0 0 1 16 0" />
-        </svg>
-        Profile
-      </a>
-      <a routerLink="/admin/admin-dashboard" routerLinkActive="active" ariaCurrentWhenActive="page">
+      @if (authUser()) {
+        <div class="profile-menu-container">
+          <button
+            #profileMenuTrigger
+            class="profile-menu-trigger"
+            id="profile-menu-trigger"
+            type="button"
+            aria-haspopup="menu"
+            [attr.aria-expanded]="profileMenuOpen()"
+            [attr.aria-controls]="profileMenuOpen() ? 'profile-account-menu' : null"
+            [disabled]="isLoggingOut()"
+            [attr.aria-busy]="isLoggingOut()"
+            (click)="toggleProfileMenu($event)"
+            (keydown)="handleProfileTriggerKeydown($event)"
+          >
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21a8 8 0 0 1 16 0" />
+            </svg>
+            <span>{{ isLoggingOut() ? 'Logging out...' : 'Profile' }}</span>
+            <svg class="profile-menu-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="m5 7.5 5 5 5-5" />
+            </svg>
+          </button>
+
+          @if (profileMenuOpen()) {
+            <div
+              #profileAccountMenu
+              class="profile-account-menu"
+              id="profile-account-menu"
+            >
+              <div class="profile-menu-heading">
+                <p>YOUR ACCOUNT</p>
+                <h2 id="profile-menu-heading">Profile &amp; Settings</h2>
+              </div>
+              <div class="profile-menu-items" role="menu" aria-labelledby="profile-menu-heading">
+                <a
+                  class="profile-menu-item"
+                  role="menuitem"
+                  routerLink="/account/user/profile"
+                  (click)="closeProfileMenu()"
+                >
+                  <span class="profile-menu-item-title">Personal Details</span>
+                  <span class="profile-menu-item-description">View and edit your profile</span>
+                </a>
+                <a
+                  class="profile-menu-item"
+                  role="menuitem"
+                  routerLink="/account/user/change-password"
+                  (click)="closeProfileMenu()"
+                >
+                  <span class="profile-menu-item-title">Security</span>
+                  <span class="profile-menu-item-description">Change your password</span>
+                </a>
+                <a
+                  class="profile-menu-item profile-menu-item-danger"
+                  role="menuitem"
+                  routerLink="/account/user/profile"
+                  [queryParams]="{ openDeleteAccount: true }"
+                  (click)="closeProfileMenu()"
+                >
+                  <span class="profile-menu-item-title">Delete Account</span>
+                  <span class="profile-menu-item-description">Manage account deletion</span>
+                </a>
+                <button
+                  class="profile-menu-item profile-menu-item-logout"
+                  type="button"
+                  role="menuitem"
+                  [disabled]="isLoggingOut()"
+                  [attr.aria-busy]="isLoggingOut()"
+                  (click)="logout()"
+                >
+                  <span class="profile-menu-item-title">{{ isLoggingOut() ? 'Logging out...' : 'Log Out' }}</span>
+                  <span class="profile-menu-item-description">Securely sign out</span>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+      <a routerLink="/dashboard" routerLinkActive="active" ariaCurrentWhenActive="page">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
           <rect x="3" y="3" width="8" height="8" rx="1" />
           <rect x="13" y="3" width="8" height="5" rx="1" />

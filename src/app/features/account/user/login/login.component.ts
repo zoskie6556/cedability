@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { FirebaseError } from 'firebase/app';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { roleDashboardPath } from '../../../../core/guards/role-routing';
 import { AuthService } from '../../../../core/services/auth.service';
+import { RoleService, UserRoleResult } from '../../../../core/services/role.service';
 import { ToastService } from '../../../../core/services/toast.service';
 
 @Component({
@@ -12,17 +22,29 @@ import { ToastService } from '../../../../core/services/toast.service';
   styleUrl: './login.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
+  private readonly activatedRoute = inject(ActivatedRoute);
   private readonly authService = inject(AuthService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly roleService = inject(RoleService);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
 
   protected readonly isSubmitting = signal(false);
+  protected readonly roleError = signal<string | null>(null);
   protected readonly form = this.formBuilder.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
   });
+
+  ngOnInit(): void {
+    this.activatedRoute.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        this.roleError.set(this.getRoleErrorMessage(params.get('roleError')));
+      });
+  }
 
   protected async submit(): Promise<void> {
     if (this.form.invalid) {
@@ -35,16 +57,48 @@ export class LoginComponent {
     }
 
     this.isSubmitting.set(true);
+    this.roleError.set(null);
 
     try {
       const { email, password } = this.form.getRawValue();
       await this.authService.signIn(email.trim(), password);
+
+      let roleResult: UserRoleResult;
+      try {
+        roleResult = await this.roleService.loadCurrentRole();
+      } catch {
+        this.roleError.set(this.getRoleErrorMessage('unavailable'));
+        return;
+      }
+
+      if (roleResult.status !== 'assigned') {
+        this.roleError.set(
+          this.getRoleErrorMessage(
+            roleResult.status === 'unauthenticated' ? 'unavailable' : roleResult.status,
+          ),
+        );
+        return;
+      }
+
       this.toastService.success('You are now logged in.');
-      await this.router.navigateByUrl('/account/user/profile');
+      await this.router.navigateByUrl(roleDashboardPath(roleResult.role));
     } catch (error: unknown) {
       this.toastService.error(this.getLoginErrorMessage(error));
     } finally {
       this.isSubmitting.set(false);
+    }
+  }
+
+  private getRoleErrorMessage(status: string | null): string | null {
+    switch (status) {
+      case 'unassigned':
+        return 'We could not verify a role for this account. Access remains restricted; please contact support.';
+      case 'invalid':
+        return 'This account has an unsupported role. Access remains restricted; please contact support.';
+      case 'unavailable':
+        return 'We could not verify account permissions. Check your connection and try again.';
+      default:
+        return null;
     }
   }
 

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { Auth, authState } from '@angular/fire/auth';
-import { firstValueFrom, take } from 'rxjs';
 import { isUserRole, UserRole } from '../models/user-role';
+import { AuthService } from './auth.service';
+import { UserDataService } from './user-data.service';
 
 export type UserRoleResult =
   | { status: 'unauthenticated' }
@@ -11,20 +11,21 @@ export type UserRoleResult =
 
 @Injectable({ providedIn: 'root' })
 export class RoleService {
-  private readonly auth = inject(Auth);
+  private readonly authService = inject(AuthService);
+  private readonly userDataService = inject(UserDataService);
 
-  async loadCurrentRole(forceRefresh = false): Promise<UserRoleResult> {
-    const user = await firstValueFrom(authState(this.auth).pipe(take(1)));
+  async loadCurrentRole(): Promise<UserRoleResult> {
+    const user = await this.authService.getCurrentUser();
     if (!user) {
       return { status: 'unauthenticated' };
     }
 
-    const token = await user.getIdTokenResult(forceRefresh);
-    if (!Object.hasOwn(token.claims, 'role')) {
+    const roleRecord = await this.userDataService.getRoleRecord(user.uid);
+    if (!roleRecord.exists) {
       return { status: 'unassigned' };
     }
 
-    const role = token.claims['role'];
+    const role = roleRecord.role;
     return isUserRole(role) ? { status: 'assigned', role } : { status: 'invalid' };
   }
 }

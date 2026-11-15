@@ -1,5 +1,10 @@
 import { Routes } from '@angular/router';
+<<<<<<< HEAD
 import { adminGuard } from './core/guards/admin.guard';
+=======
+import { dashboardRedirectGuard } from './core/guards/dashboard-redirect.guard';
+import { roleGuard } from './core/guards/role.guard';
+>>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
 
 /**
  * Root routes for CEDAbility.
@@ -30,12 +35,21 @@ export const routes: Routes = [
     loadChildren: () => import('./features/account/account.routes').then(m => m.ACCOUNT_ROUTES),
   },
   {
+    path: 'dashboard',
+    canActivate: [dashboardRedirectGuard],
+    loadComponent: () =>
+      import('./features/account/user-dashboard/user-dashboard.component').then(
+        (m) => m.UserDashboardComponent,
+      ),
+  },
+  {
     path: 'submissions',
-    // TODO: add canActivate: [authGuard] once core/guards is written
+    canActivate: [roleGuard('user')],
     loadChildren: () => import('./features/submissions/submissions.routes').then(m => m.SUBMISSIONS_ROUTES),
   },
   {
     path: 'evaluation',
+    canActivate: [roleGuard('evaluator')],
     loadChildren: () => import('./features/evaluation/evaluation.routes').then(m => m.EVALUATION_ROUTES),
   },
   {
@@ -53,7 +67,11 @@ export const routes: Routes = [
   // },
   {
     path: 'admin',
+<<<<<<< HEAD
     // canActivate: [adminGuard],
+=======
+    canActivate: [roleGuard('admin')],
+>>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
     loadChildren: () => import('./features/admin/admin.routes').then(m => m.ADMIN_ROUTES),
   },
   {

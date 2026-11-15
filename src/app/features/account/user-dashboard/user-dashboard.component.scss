@@ -1,0 +1,121 @@
+:host {
+  display: block;
+}
+
+.user-dashboard {
+  display: grid;
+  min-height: min(72vh, 760px);
+  place-items: center;
+  padding: clamp(1.25rem, 5vw, 4rem);
+  background:
+    radial-gradient(ellipse at 18% 18%, #ffe1b35c, transparent 34rem),
+    radial-gradient(ellipse at 84% 78%, #f6a77838, transparent 32rem),
+    #fffaf6;
+}
+
+.dashboard-panel,
+.dashboard-state {
+  width: min(100%, 780px);
+  padding: clamp(1.5rem, 5vw, 4rem);
+  border: 1px solid #eadfd8;
+  border-radius: 2rem;
+  background: linear-gradient(145deg, #fffdfaee, #fff4e8e8);
+  box-shadow: 0 24px 70px #4d211b1a;
+}
+
+.dashboard-eyebrow {
+  margin: 0 0 0.75rem;
+  color: #a63a17;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.dashboard-panel h1,
+.dashboard-state h1 {
+  margin: 0;
+  color: #4d211b;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.dashboard-intro,
+.dashboard-state p {
+  max-width: 56ch;
+  margin: 1rem 0 0;
+  color: #6d625d;
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 2rem;
+}
+
+.dashboard-button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  font-weight: 750;
+  text-align: center;
+  text-decoration: none;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.dashboard-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px #4d211b1a;
+}
+
+.dashboard-button-primary {
+  background: #c53e13;
+  color: #fff;
+}
+
+.dashboard-button-secondary {
+  border-color: #e7c7b4;
+  background: #fffaf6;
+  color: #6c2b19;
+}
+
+.dashboard-text-link {
+  min-height: 44px;
+  align-content: center;
+  color: #8d3217;
+  font-weight: 700;
+  text-underline-offset: 0.2em;
+}
+
+.dashboard-state {
+  border-color: #e6b9a7;
+  background: #fff8f4;
+}
+
+@media (max-width: 560px) {
+  .dashboard-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-text-link {
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-button {
+    transition: none;
+  }
+
+  .dashboard-button:hover {
+    transform: none;
+  }
+}

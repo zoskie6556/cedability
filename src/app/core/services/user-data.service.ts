@@ -80,6 +80,15 @@ export class UserDataService {
     return this.parseUser(authUser.uid, createdUserSnapshot.data());
   }
 
+  async getRoleRecord(uid: string): Promise<{ exists: boolean; role: unknown }> {
+    const userSnapshot = await getDoc(doc(this.firestore, 'users', uid));
+    if (!userSnapshot.exists()) {
+      return { exists: false, role: undefined };
+    }
+
+    return { exists: true, role: userSnapshot.data()['role'] };
+  }
+
   async saveProfile(uid: string, profile: Profile): Promise<void> {
     await updateDoc(doc(this.firestore, 'users', uid), {
       profile: {
