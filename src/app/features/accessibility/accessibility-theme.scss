@@ -1,0 +1,36 @@
+.accessibility-theme {
+  --a11y-font: system-ui, sans-serif;
+  --a11y-surface: #ffffff;
+  --a11y-surface-muted: #f1f3f5;
+  --a11y-text: #20252b;
+  --a11y-muted: #4c5661;
+  --a11y-border: #6b747e;
+  --a11y-primary: #294681;
+  --a11y-on-primary: #ffffff;
+  --a11y-focus: #0759bd;
+  --a11y-danger: #8d1d16;
+  --a11y-warm: #8b3b00;
+  --a11y-cool: #4c3b83;
+  --a11y-deep: #40382f;
+  --a11y-radius-md: 0.65rem;
+  --a11y-radius-lg: 1rem;
+  --a11y-shadow: 0 0.3rem 1rem rgb(0 0 0 / 10%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .accessibility-theme {
+    --a11y-surface: #181c20;
+    --a11y-surface-muted: #242a30;
+    --a11y-text: #f4f6f8;
+    --a11y-muted: #c1c8cf;
+    --a11y-border: #89939d;
+    --a11y-primary: #a9c5ff;
+    --a11y-on-primary: #121b2c;
+    --a11y-focus: #9cc4ff;
+    --a11y-danger: #ffaaa3;
+    --a11y-warm: #ffb37d;
+    --a11y-cool: #c3b3ff;
+    --a11y-deep: #d3c2a8;
+    --a11y-shadow: 0 0.3rem 1rem rgb(0 0 0 / 30%);
+  }
+}

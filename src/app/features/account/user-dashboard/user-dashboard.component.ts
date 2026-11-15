@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
-import { roleDashboardPath } from '../../../core/guards/role-routing';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
+import type { User } from '../../../shared/models/user.model';
 
 @Component({
   selector: 'app-user-dashboard',
@@ -39,8 +39,13 @@ export class UserDashboardComponent implements OnInit {
       }
 
       const user = await this.userDataService.getOrCreateUser(authUser);
-      if (user.role !== 'user') {
-        await this.router.navigateByUrl(roleDashboardPath(user.role), { replaceUrl: true });
+      if (user.role !== 'submitter') {
+        // user.role uses the richer domain role set; map the roles that have
+        // a dedicated dashboard and fall back to the lightweight redirect
+        // guard for any other role.
+        await this.router.navigateByUrl(this.resolveDashboardPath(user.role), {
+          replaceUrl: true,
+        });
         return;
       }
 
@@ -55,6 +60,17 @@ export class UserDashboardComponent implements OnInit {
       this.toastService.error('We could not load your dashboard. Check your connection and try again.');
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  private resolveDashboardPath(role: User['role']): string {
+    switch (role) {
+      case 'evaluator':
+        return '/evaluation/review';
+      case 'admin':
+        return '/admin/admin-dashboard';
+      default:
+        return '/dashboard';
     }
   }
 }

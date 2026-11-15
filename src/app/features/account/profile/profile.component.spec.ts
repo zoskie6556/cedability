@@ -30,7 +30,7 @@ describe('ProfileComponent', () => {
     fullName: 'Casey Example',
     emailVerified: false,
     phoneNumberVerified: false,
-    role: 'user',
+    role: 'submitter',
     profile: {
       userType: 'individual',
       profession: '',

@@ -1,4 +1,4 @@
-// ===============================================================
+﻿// ===============================================================
 // Assumed Data Model
 // users/{uid}: private account fields, role and profile map. Clients create
 // submitter records and may update only validated profile fields; admins can
@@ -17,21 +17,11 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
-<<<<<<< HEAD
     function isAdmin() {
       return request.auth != null && request.auth.token.role == 'admin';
     }
 
     function isUser() {
-=======
-    function isUser() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'user';
-    }
-
-    function isEvaluator() {
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['user', 'submitter'];
@@ -262,7 +252,6 @@ service cloud.firestore {
           'profile',
           'updatedAt'
         ])
-<<<<<<< HEAD
         && request.resource.data.profile.passwordLastSetAt ==
           resource.data.profile.passwordLastSetAt
         && request.resource.data.uid == resource.data.uid
@@ -273,18 +262,12 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
-=======
-        && request.resource.data.role == resource.data.role;
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
       allow delete: if false;
     }
 
     match /ideas/{ideaId} {
       allow create: if isUser()
-<<<<<<< HEAD
         && isValidIdea()
-=======
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
         && request.resource.data.keys().hasAll([
           'ownerId',
           'ownerName',
@@ -442,21 +425,7 @@ service cloud.firestore {
           && isValidNewQuestion();
         allow update: if signedInAs(parentIdeaOwnerId())
           && isUser()
-<<<<<<< HEAD
           && isValidQuestionResponse();
-=======
-          && resource.data.response == null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'response',
-            'respondedBy',
-            'respondedAt'
-          ])
-          && request.resource.data.response is string
-          && request.resource.data.response.size() > 0
-          && request.resource.data.response.size() <= 5000
-          && request.resource.data.respondedBy == request.auth.uid
-          && request.resource.data.respondedAt == request.time;
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
         allow delete: if false;
       }
     }

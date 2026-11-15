@@ -25,7 +25,7 @@ describe('UserDashboardComponent', () => {
   let fixture: ComponentFixture<UserDashboardComponent>;
   let router: Router;
 
-  function makeUser(onboardingCompleted: boolean, role: User['role'] = 'user'): User {
+  function makeUser(onboardingCompleted: boolean, role: User['role'] = 'submitter'): User {
     return {
       uid: authUser.uid,
       email: 'ada@example.com',

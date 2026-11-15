@@ -1,0 +1,119 @@
+<section class="page-shell">
+  <p class="eyebrow">Support</p>
+  <h2>Tickets</h2>
+  <p>Monitor inbound support requests, assign agents, and resolve cases.</p>
+
+  @if (error()) {
+    <p class="empty-state" role="alert">{{ error() }}</p>
+  }
+
+  <div class="ticket-counts" aria-label="Ticket summary">
+    <span class="count-chip"><strong>{{ counts().total }}</strong> Total</span>
+    <span class="count-chip"><strong>{{ counts().open }}</strong> Open</span>
+    <span class="count-chip"><strong>{{ counts().inProgress }}</strong> In progress</span>
+    <span class="count-chip"><strong>{{ counts().resolved }}</strong> Resolved</span>
+    <span class="count-chip"><strong>{{ counts().unassigned }}</strong> Unassigned</span>
+  </div>
+
+  <div class="toolbar">
+    <label class="search-field">
+      <span class="sr-only">Search tickets</span>
+      <input type="search" placeholder="Search by issue, user or ID" [value]="search()" (input)="onSearch($event)" />
+    </label>
+
+    <select class="filter-select" aria-label="Filter by status" [value]="statusFilter()" (change)="onStatusFilter($event)">
+      <option value="all">All statuses</option>
+      @for (option of statusOptions; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </select>
+
+    <select
+      class="filter-select"
+      aria-label="Filter by priority"
+      [value]="priorityFilter()"
+      (change)="onPriorityFilter($event)"
+    >
+      <option value="all">All priorities</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <app-idea-loader label="Loading tickets" />
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Issue</th>
+            <th>User</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Assigned to</th>
+            <th>Update status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (ticket of filteredTickets(); track ticket.id) {
+            <tr>
+              <td>{{ shortId(ticket) }}</td>
+              <td>
+                <strong>{{ ticket.subject }}</strong>
+                @if (ticket.category) {
+                  <div class="sub-text">{{ ticket.category }}</div>
+                }
+              </td>
+              <td>{{ ticket.userName }}</td>
+              <td>
+                <span class="tag" [class]="'tag priority-' + ticket.priority">{{ priorityLabel(ticket.priority) }}</span>
+              </td>
+              <td>
+                <span class="tag" [class]="'tag ' + statusClass(ticket.status)">{{ statusLabel(ticket.status) }}</span>
+              </td>
+              <td>
+                <select
+                  class="row-select"
+                  [attr.aria-label]="'Assign ' + ticket.subject"
+                  [value]="ticket.assignedTo ?? ''"
+                  (change)="onAssign($event, ticket)"
+                >
+                  <option value="">Unassigned</option>
+                  @for (agent of agents(); track agent.id) {
+                    <option [value]="agent.id" [selected]="agent.id === ticket.assignedTo">{{ agent.name }}</option>
+                  }
+                </select>
+              </td>
+              <td>
+                <select
+                  class="row-select"
+                  [attr.aria-label]="'Change status of ' + ticket.subject"
+                  (change)="onStatusChange($event, ticket)"
+                >
+                  @for (option of statusOptions; track option.value) {
+                    <option [value]="option.value" [selected]="option.value === ticket.status">{{ option.label }}</option>
+                  }
+                </select>
+              </td>
+              <td>{{ formatDate(ticket.createdAt) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" class="empty-state">
+                @if (counts().total === 0) {
+                  No tickets yet. Tickets appear here as soon as users submit them.
+                } @else {
+                  No tickets match the current filters.
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

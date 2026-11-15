@@ -1,17 +1,14 @@
 import { Routes } from '@angular/router';
-<<<<<<< HEAD
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
-=======
 import { roleGuard } from '../../core/guards/role.guard';
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
 
 export const ADMIN_ROUTES: Routes = [
   {
-<<<<<<< HEAD
     path: '',
     component: AdminDashboardComponent,
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'overview' },
+      { path: 'admin-dashboard', pathMatch: 'full', redirectTo: 'overview' },
       {
         path: 'overview',
         title: 'Overview',
@@ -62,11 +59,5 @@ export const ADMIN_ROUTES: Routes = [
           import('./settings/settings.component').then((m) => m.SettingsComponent),
       },
     ],
-=======
-    path: 'admin-dashboard',
-    title: 'Admin Dashboard',
-    canActivate: [roleGuard('admin')],
-    loadComponent: () => import('./admin-dashboard/admin-dashboard.component').then(m => m.AdminDashboardComponent),
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
   },
 ];

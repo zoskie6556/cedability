@@ -25,11 +25,7 @@ export class AuthService {
     try {
       await this.userData.createUserDocument(user.uid, email, fullName);
     } catch (error: unknown) {
-<<<<<<< HEAD
-      throw new UserDocumentCreationError(error);
-=======
       throw new AccountFirestoreWriteError(error);
->>>>>>> 65eedde6ea6ed75d8ef3a93b55c4ac03ca0a8c0a
     }
 
     try {
