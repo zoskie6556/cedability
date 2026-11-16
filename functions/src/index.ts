@@ -19,4 +19,4 @@ export const setUserActive = onCall(async request => setUserActiveHandler(reques
 export const resendInvite = onCall(async request => resendInviteHandler(request));
 export const deleteUserAccount = onCall(async request => deleteUserAccountHandler(request));
 export const recomputeStats = onCall(async request => recomputeStatsHandler(request));
-export { screenNewIdea } from './idea-screening';
+export { onIdeaCreated } from './idea-screening';

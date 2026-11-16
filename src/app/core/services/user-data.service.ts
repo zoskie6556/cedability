@@ -15,12 +15,14 @@ import {
   where,
 } from '@angular/fire/firestore';
 import { Timestamp } from 'firebase/firestore';
+import { isIdeaCategory } from '../../shared/models/automated-review.model';
 import type { IdeaQuestion } from '../../shared/models/idea-evaluation.model';
 import { requireIdeaStatus } from '../../shared/models/status-parse';
 import {
   type AutomatedReviewFinding,
   type AutomatedReviewReport,
   type AutomatedReviewStatus,
+  type IdeaCategory,
   type Idea,
   type IdeaFeasibilityPlan,
   type IdeaFinancingPlan,
@@ -28,6 +30,7 @@ import {
   type IdeaMilestone,
   type NewIdea,
   type ReviewFindingStatus,
+  type SimilarityCheckResult,
 } from '../../shared/models/idea.model';
 import type { Profile, UserType } from '../../shared/models/profile.model';
 import type { User } from '../../shared/models/user.model';
@@ -234,6 +237,8 @@ export class UserDataService {
       financingPlan: parseFinancingPlan(idea['financingPlan']),
       milestones: parseMilestones(idea['milestones']),
       aiAnalysisConsent: idea['aiAnalysisConsent'] === true,
+      category: parseIdeaCategory(idea['category']),
+      similarityCheck: parseSimilarityCheck(idea['similarityCheck']),
       automatedReview: parseAutomatedReview(idea['automatedReview']),
       status: requireIdeaStatus(idea['status']),
       createdAt: requireTimestampOrNull(idea['createdAt'], 'createdAt'),
@@ -316,12 +321,16 @@ function requireNumber(value: unknown, fieldName: string): number {
   return value;
 }
 
-function requireStringArray(value: unknown, fieldName: string): string[] {
+function requireArray(value: unknown, fieldName: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new Error(`The Firestore ${fieldName} value is not a list.`);
   }
 
-  return value.map((item) => requireString(item, fieldName));
+  return value;
+}
+
+function requireStringArray(value: unknown, fieldName: string): string[] {
+  return requireArray(value, fieldName).map((item) => requireString(item, fieldName));
 }
 
 function requireTimestampOrNull(value: unknown, fieldName: string): Timestamp | null {
@@ -454,6 +463,58 @@ function parseAutomatedReview(value: unknown): AutomatedReviewReport | null {
         ? null
         : requireString(review['failureMessage'], 'failureMessage'),
   };
+}
+
+function parseIdeaCategory(value: unknown): IdeaCategory | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (isIdeaCategory(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return 'other';
+  }
+  throw new Error('The Firestore idea category is invalid.');
+}
+
+function parseSimilarityCheck(value: unknown): SimilarityCheckResult | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const check = requireRecord(value, 'similarity check');
+  const status = check['status'];
+  if (status !== 'complete' && status !== 'failed') {
+    throw new Error('The Firestore similarity check status is invalid.');
+  }
+  const comparedIdeas = requireNumber(check['comparedIdeas'], 'comparedIdeas');
+  if (!Number.isInteger(comparedIdeas) || comparedIdeas < 0) {
+    throw new Error('The Firestore similarity check count is invalid.');
+  }
+  const truncated = check['truncated'];
+  if (typeof truncated !== 'boolean') {
+    throw new Error('The Firestore similarity check truncation flag is invalid.');
+  }
+  const matches = requireArray(check['matches'], 'similarity matches').map((value) => {
+    const match = requireRecord(value, 'similar idea match');
+    const jaccardSimilarity = requireNumber(match['jaccardSimilarity'], 'jaccardSimilarity');
+    if (jaccardSimilarity < 0 || jaccardSimilarity > 1) {
+      throw new Error('The Firestore idea similarity score is invalid.');
+    }
+    return {
+      ideaId: requireString(match['ideaId'], 'ideaId'),
+      title: requireString(match['title'], 'title'),
+      jaccardSimilarity,
+      matchingKeywords: requireStringArray(match['matchingKeywords'], 'matchingKeywords'),
+    };
+  });
+  const failureMessage =
+    check['failureMessage'] === null
+      ? null
+      : requireString(check['failureMessage'], 'failureMessage');
+
+  return { status, comparedIdeas, truncated, matches, failureMessage };
 }
 
 function parseReviewFinding(value: unknown): AutomatedReviewFinding {

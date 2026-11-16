@@ -3,8 +3,10 @@
 // users/{uid}: private account fields, role and profile map. Clients create
 // submitter records and may update only validated profile fields; admins can
 // read user records for the admin user-management workflow.
-// ideas/{ideaId}: one submitted idea with ownerId, plans, timestamps and a
-// server-managed automatedReview map. Clients cannot update or delete ideas.
+// ideas/{ideaId}: one submitted idea with ownerId, plans, timestamps and
+// server-managed category, similarityCheck and automatedReview results.
+// Clients can only create the fixed queued review envelope and cannot update
+// or delete ideas.
 // ideas/{ideaId}/questions/{questionId}: evaluator question and owner response.
 // stats/{docId}: server-written aggregates. auditLogs/{logId}: server-written
 // audit events. Admin SDK writes bypass these client rules.

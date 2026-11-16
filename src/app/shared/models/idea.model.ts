@@ -1,16 +1,13 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { IdeaStatus } from '../workflow/idea-workflow';
+import type {
+  AutomatedReviewReport,
+  IdeaCategory,
+  SimilarityCheckResult,
+} from './automated-review.model';
 
 export type { IdeaStatus } from '../workflow/idea-workflow';
-export type ReviewFindingStatus = 'supported' | 'unclear' | 'risk' | 'not-enough-information';
-export type AutomatedReviewStatus = 'queued' | 'running' | 'complete' | 'failed';
-export type AutomatedReviewCriterion =
-  | 'market'
-  | 'technical'
-  | 'operations'
-  | 'financial'
-  | 'delivery'
-  | 'impact';
+export * from './automated-review.model';
 
 export interface IdeaMarketPlan {
   targetMarket: string;
@@ -47,28 +44,6 @@ export interface IdeaMilestone {
   estimatedCost: number | null;
 }
 
-export interface AutomatedReviewFinding {
-  status: ReviewFindingStatus;
-  evidence: string[];
-  informationGaps: string[];
-  evaluatorQuestions: string[];
-}
-
-export interface AutomatedReviewReport {
-  status: AutomatedReviewStatus;
-  model: string;
-  rubricVersion: string;
-  summary: string;
-  criteria: Record<AutomatedReviewCriterion, AutomatedReviewFinding> | null;
-  strengths: string[];
-  informationGaps: string[];
-  questionsForHumanEvaluator: string[];
-  limitations: string[];
-  startedAt: Timestamp | null;
-  completedAt: Timestamp | null;
-  failureMessage: string | null;
-}
-
 export interface IdeaDocument {
   ownerId: string;
   ownerName: string;
@@ -82,6 +57,8 @@ export interface IdeaDocument {
   financingPlan: IdeaFinancingPlan;
   milestones: IdeaMilestone[];
   aiAnalysisConsent: boolean;
+  category: IdeaCategory | null;
+  similarityCheck: SimilarityCheckResult | null;
   automatedReview: AutomatedReviewReport | null;
   status: IdeaStatus;
   createdAt: Timestamp | null;

@@ -71,7 +71,9 @@ Every document has `createdAt` and `updatedAt` (Firestore `Timestamp`). Field na
 | ownerName | string | denormalized for list views |
 | title | string | |
 | summary | string | short text for lists |
-| category | string | |
+| category | `health` \| `agriculture` \| `tech` \| `business` \| `marketing` \| `sales` \| `other` \| null | Set by the idea-created Function; clients cannot write it. |
+| similarityCheck | map? | Server-computed keyword/Jaccard check; scans up to 500 plans and stores up to 5 matches. |
+| automatedReview | map? | Advisory `AutomatedReviewReport`; clients may create only the fixed empty `queued` envelope. Functions own `running`, `complete` and `failed` results. |
 | answers | map | answers to the dynamic form, keyed by field key |
 | formDefinitionId / formVersion | string / number | which form was used |
 | attachments | array<map> | `{ name, storagePath, contentType, size }` (keep small, max ~10) |
@@ -86,6 +88,10 @@ Subcollections:
 - **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: boolean, reply?: { message, at }, createdAt }`
 - **evaluations/{stageId_evaluatorUid}**: `{ stageId, evaluatorUid, scores: { [criterionId]: number }, comments, total, submittedAt }` (submitter cannot read)
 - **adjudications/{stageId}**: `{ stageId, adjudicatorUid, decision: 'advance'|'reject'|'revise', finalScore, note, decidedAt }`
+
+`similarityCheck` is `{ status: 'complete'|'failed', comparedIdeas, truncated, matches: [{ ideaId, title, jaccardSimilarity, matchingKeywords }], failureMessage }`. A check compares plan text only, requires at least two shared keywords and a Jaccard similarity of at least `0.15`, and marks scans beyond 500 documents as truncated. Names, emails and owner IDs are never included in the comparison text.
+
+The idea-created Function advances `submitted` to `ai_screening`, then to `needs_amendment` when required information is absent or to `ceda_criteria` when screening completes or fails. Every status change atomically writes `statusHistory`, an owner notification, and an `auditLogs` entry. Gemini receives only plan fields and provides advisory findings against the fixed market, technical, operations, financial, delivery and impact rubric. Web/IP checks are deferred.
 
 ### `assignments/{assignmentId}`
 `{ ideaId, stageId, evaluatorUid, status: 'pending'|'in_progress'|'done', dueAt?, assignedBy }`
