@@ -23,8 +23,27 @@
           {{ stat.delta }}
         </span>
       </div>
+
       <div class="stat-value">{{ stat.value }}</div>
-      <a [routerLink]="stat.route" class="stat-link">View details</a>
+
+      <div class="stat-footer">
+        <a [routerLink]="stat.route" class="stat-link">
+          <span class="stat-link-text">View details</span>
+          <span class="arrow-badge" aria-hidden="true">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.25"
+            >
+              <path d="M5 12h14" />
+              <path d="M13 6l6 6-6 6" />
+            </svg>
+          </span>
+        </a>
+      </div>
     </article>
   }
 </div>
@@ -85,4 +104,4 @@
       <p class="empty-state">No role data has been recorded yet.</p>
     }
   </section>
-</div>
+</div>  

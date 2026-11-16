@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
+
 import {
   AdminFormDocumentService,
   FORM_CATEGORIES,
@@ -29,6 +30,7 @@ export class FormsComponent implements OnInit {
   readonly loading = this.service.loading;
   readonly error = this.service.error;
 
+  readonly activeView = signal<'available' | 'upload'>('available');
   readonly selectedFile = signal<File | null>(null);
   readonly editing = signal<FormDocumentRow | null>(null);
   readonly dragging = signal(false);
@@ -61,6 +63,17 @@ export class FormsComponent implements OnInit {
 
   ngOnInit(): void {
     this.service.watch(this.destroyRef);
+  }
+
+  // ------------------------------------------------------------------ View switching
+
+  setView(view: 'available' | 'upload'): void {
+    this.activeView.set(view);
+  }
+
+  editAndOpenForm(row: FormDocumentRow): void {
+    this.edit(row);
+    this.activeView.set('upload');
   }
 
   // ------------------------------------------------------------------ Choosing a file
@@ -126,6 +139,7 @@ export class FormsComponent implements OnInit {
         this.toast.success(input.isPublished ? 'Document uploaded and published.' : 'Document uploaded as a draft.');
       }
       this.resetForm();
+      this.activeView.set('available');
     } catch (error) {
       this.toast.error(this.messageFrom(error, 'Unable to save the document.'));
     } finally {
@@ -146,6 +160,7 @@ export class FormsComponent implements OnInit {
 
   cancelEdit(): void {
     this.resetForm();
+    this.activeView.set('available');
   }
 
   // ------------------------------------------------------------------ Row actions

@@ -1,160 +1,168 @@
 <section class="page-shell">
-  <p class="eyebrow">Configuration</p>
+  <p class="eyebrow">Content</p>
   <h2>Forms</h2>
   <p>Upload application forms and supporting documents (PDF or Word), update them, and control what is published.</p>
 
-  @if (error()) {
-    <p class="empty-state" role="alert">{{ error() }}</p>
-  }
+  <div class="segmented-bar" role="tablist" aria-label="Forms view">
+    <button type="button" role="tab" class="segment-button" [class.active]="activeView() === 'available'"
+      [attr.aria-selected]="activeView() === 'available'" (click)="setView('available')">
+      Available forms
+      <span class="segment-count">{{ documents().length }}</span>
+    </button>
 
-  <!-- One hidden picker shared by every "Replace file" button -->
-  <input
-    #replacePicker
-    type="file"
-    class="sr-only"
-    tabindex="-1"
+    <button type="button" role="tab" class="segment-button" [class.active]="activeView() === 'upload'"
+      [attr.aria-selected]="activeView() === 'upload'" (click)="setView('upload')">
+      {{ editing() ? 'Edit form' : 'Upload form' }}
+    </button>
+  </div>
+
+  <!-- Hidden file picker used by "Replace file" on existing document cards -->
+  <input #replacePicker type="file"
     accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    (change)="onReplaceSelected($event)"
-  />
+    class="sr-only" (change)="onReplaceSelected($event)" />
 
-  <section class="form-panel" aria-labelledby="upload-title">
-    <h3 id="upload-title">{{ editing() ? 'Edit document details' : 'Upload a document' }}</h3>
+  @if (activeView() === 'upload') {
+  <section class="form-panel" aria-label="Document upload form">
+    <h3>{{ editing() ? 'Edit document details' : 'Upload a document' }}</h3>
 
-    <form [formGroup]="form" (ngSubmit)="save()" class="content-form">
+    <form class="content-form" [formGroup]="form" (ngSubmit)="save()">
       @if (!editing()) {
-        <div class="dropzone-wrap">
-          <input
-            id="form-file"
-            class="sr-only"
-            type="file"
-            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            (change)="onFileSelected($event)"
-          />
-          <label
-            for="form-file"
-            class="dropzone"
-            [class.dragging]="dragging()"
-            (dragover)="onDragOver($event)"
-            (dragleave)="onDragLeave()"
-            (drop)="onDrop($event)"
-          >
-            @if (selectedFile(); as file) {
-              <strong>{{ file.name }}</strong>
-              <span>{{ formatSize(file.size) }} · click or drop to choose a different file</span>
-            } @else {
-              <strong>Drop a file here, or click to browse</strong>
-              <span>PDF, DOC or DOCX, up to {{ maxMb }} MB</span>
-            }
-          </label>
-          @if (selectedFile()) {
-            <button type="button" class="secondary-button" (click)="clearFile()">Remove file</button>
+      <div class="dropzone-wrap">
+        <input #fileInput type="file"
+          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          class="sr-only" (change)="onFileSelected($event)" />
+
+        <div class="dropzone" [class.dragging]="dragging()" (click)="fileInput.click()" (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+          @if (selectedFile(); as file) {
+          <strong>{{ file.name }}</strong>
+          <span>{{ formatSize(file.size) }} — click or drop to replace</span>
+          } @else {
+          <strong>Drop a file here, or click to browse</strong>
+          <span>PDF, DOC or DOCX, up to {{ maxMb }} MB</span>
           }
         </div>
+
+        @if (selectedFile()) {
+        <button type="button" class="row-button" (click)="clearFile()">
+          Remove selected file
+        </button>
+        }
+      </div>
       }
 
       <label>
-        <span>Title</span>
-        <input formControlName="title" type="text" maxlength="150" placeholder="Application intake form" />
-        @if (form.controls.title.touched && form.controls.title.invalid) {
-          <small class="field-error" role="alert">A title is required.</small>
+        Title
+        <input type="text" formControlName="title" placeholder="Application intake form" />
+        @if (form.controls.title.touched && form.controls.title.hasError('required')) {
+        <span class="field-error">Title is required.</span>
         }
       </label>
 
       <label>
-        <span>Description (optional)</span>
-        <textarea formControlName="description" rows="3" maxlength="500" placeholder="What is this document for?"></textarea>
+        Description (optional)
+        <textarea rows="3" formControlName="description" placeholder="What is this document for?"></textarea>
       </label>
 
       <div class="field-row">
         <label>
-          <span>Category</span>
+          Category
           <select formControlName="category">
-            @for (category of categories; track category) {
-              <option [value]="category">{{ category }}</option>
+            @for (cat of categories; track cat) {
+            <option [value]="cat">{{ cat }}</option>
             }
           </select>
         </label>
 
         <label class="check">
-          <input formControlName="isPublished" type="checkbox" />
+          <input type="checkbox" formControlName="isPublished" />
           <span>Published (visible to applicants)</span>
         </label>
       </div>
 
       @if (saving() && !editing()) {
-        <div class="progress-row" role="status" aria-live="polite">
-          <progress max="100" [value]="progress()"></progress>
-          <span>Uploading… {{ progress() }}%</span>
-        </div>
+      <div class="progress-row">
+        <progress [value]="progress()" max="100"></progress>
+        <span>{{ progress() }}%</span>
+      </div>
       }
 
       <div class="form-actions">
         <button type="submit" class="primary-button" [disabled]="saving()">
-          {{ editing() ? 'Save changes' : 'Upload document' }}
+          {{ saving() ? 'Saving...' : editing() ? 'Save changes' : 'Upload document' }}
         </button>
+
         @if (editing()) {
-          <button type="button" class="secondary-button" (click)="cancelEdit()">Cancel</button>
+        <button type="button" class="secondary-button" (click)="cancelEdit()">Cancel</button>
         }
       </div>
     </form>
   </section>
-
+  } @else {
   <div class="toolbar">
     <label class="search-field">
       <span class="sr-only">Search documents</span>
-      <input type="search" placeholder="Search by title, category or file name" [value]="search()" (input)="onSearch($event)" />
+      <input type="search" [value]="search()" (input)="onSearch($event)"
+        placeholder="Search documents by title, category, or file name..." />
     </label>
   </div>
 
+  @if (error()) {
+  <p class="field-error">{{ error() }}</p>
+  }
+
   @if (loading()) {
-    <app-idea-loader label="Loading documents" />
+  <app-idea-loader />
   } @else {
-    <div class="card-grid">
-      @for (item of visibleDocuments(); track item.id) {
-        <article class="card">
-          <div class="header-row">
-            <h3>{{ item.title }}</h3>
-            <span class="status" [class.published]="item.isPublished">
-              {{ item.isPublished ? 'Published' : 'Draft' }}
-            </span>
-          </div>
+  <div class="card-grid">
+    @for (row of visibleDocuments(); track row.id) {
+    <article class="card">
+      <div class="header-row">
+        <h3>{{ row.title }}</h3>
+        <span class="status" [class.published]="row.isPublished">
+          {{ row.isPublished ? 'Published' : 'Draft' }}
+        </span>
+      </div>
 
-          <p class="meta">
-            {{ item.category }} · {{ typeLabel(item) }} · {{ formatSize(item.size) }} · Version {{ item.version }}
-          </p>
-          @if (item.description) {
-            <p class="body-text">{{ item.description }}</p>
-          }
-          <p class="meta">{{ item.fileName }} · Updated {{ formatDate(item.updatedAt) }}</p>
-
-          @if (busyId() === item.id) {
-            <div class="progress-row" role="status" aria-live="polite">
-              <progress max="100" [value]="progress()"></progress>
-              <span>Replacing file… {{ progress() }}%</span>
-            </div>
-          }
-
-          <div class="card-actions">
-            <button type="button" class="row-button" (click)="download(item)">Download</button>
-            <button type="button" class="row-button" [disabled]="busyId() === item.id" (click)="startReplace(item, replacePicker)">
-              Replace file
-            </button>
-            <button type="button" class="row-button" (click)="edit(item)">Edit details</button>
-            <button type="button" class="row-button" (click)="togglePublished(item)">
-              {{ item.isPublished ? 'Unpublish' : 'Publish' }}
-            </button>
-            <button type="button" class="row-button danger" (click)="remove(item)">Delete</button>
-          </div>
-        </article>
-      } @empty {
-        <p class="empty-state">
-          @if (documents().length === 0) {
-            No documents yet. Upload the first one above.
-          } @else {
-            No documents match your search.
-          }
-        </p>
+      @if (row.description) {
+      <p class="body-text">{{ row.description }}</p>
       }
-    </div>
+
+      <p class="meta">
+        {{ row.category }} · {{ typeLabel(row) }} · v{{ row.version }} · {{ row.fileName }} ({{
+        formatSize(row.size) }})
+      </p>
+
+      <p class="meta">
+        Updated {{ formatDate(row.updatedAt) }}
+      </p>
+
+      @if (busyId() === row.id) {
+      <div class="progress-row">
+        <progress [value]="progress()" max="100"></progress>
+        <span>Replacing file: {{ progress() }}%</span>
+      </div>
+      }
+
+      <div class="card-actions">
+        <button type="button" class="row-button" (click)="download(row)">Download</button>
+        <button type="button" class="row-button" (click)="editAndOpenForm(row)">Edit details</button>
+        <button type="button" class="row-button" [disabled]="busyId() === row.id"
+          (click)="startReplace(row, replacePicker)">
+          {{ busyId() === row.id ? 'Replacing...' : 'Replace file' }}
+        </button>
+        <button type="button" class="row-button" (click)="togglePublished(row)">
+          {{ row.isPublished ? 'Unpublish' : 'Publish' }}
+        </button>
+        <button type="button" class="row-button danger" (click)="remove(row)">
+          Delete
+        </button>
+      </div>
+    </article>
+    } @empty {
+    <p class="empty-state">No documents match your filter.</p>
+    }
+  </div>
+  }
   }
 </section>

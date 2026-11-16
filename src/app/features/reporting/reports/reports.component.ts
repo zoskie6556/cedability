@@ -107,7 +107,7 @@ export class ReportsComponent implements OnInit {
       }
 
       this.authorized.set(true);
-      this.summary.set(await this.chatService.loadAnalytics());
+      //this.summary.set(await this.chatService.loadAnalytics());
     } catch (loadError) {
       console.error('[ReportsComponent] could not load chat analytics.', loadError);
       this.error.set('Chat analytics could not be loaded. Please try again.');

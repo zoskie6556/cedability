@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NgFor } from '@angular/common';
 import { DestroyRef } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
@@ -6,13 +6,15 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-admin-dashboard',
-  imports: [NgFor, RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   templateUrl: './admin-dashboard.component.html',
   styleUrl: './admin-dashboard.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AdminDashboardComponent {
   private readonly sanitizer = inject(DomSanitizer);
+  readonly sidebarOpen = signal(true);
+  readonly notificationCount = signal<number>(0);
 
   readonly navigation = [
     {
@@ -30,11 +32,11 @@ export class AdminDashboardComponent {
       path: '/admin/staff-activity',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18c1.1-2.4 3-3.6 5.5-3.6S9.3 15.6 12 18M7.5 9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm9.5 2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Zm-2.1 8.2c.9-1.9 2.5-3.1 4.5-3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     },
-    {
-      label: 'Tickets',
-      path: '/admin/tickets',
-      icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    },
+    // {
+    //   label: 'Tickets',
+    //   path: '/admin/tickets',
+    //   icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    // },
     {
       label: 'Ideas',
       path: '/admin/ideas',
@@ -69,5 +71,8 @@ export class AdminDashboardComponent {
 
   safeIcon(icon: string) {
     return this.sanitizer.bypassSecurityTrustHtml(icon);
+  }
+  toggleSidebar(): void {
+    this.sidebarOpen.update((open) => !open);
   }
 }

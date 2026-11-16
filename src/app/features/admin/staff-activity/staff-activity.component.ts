@@ -15,12 +15,14 @@ type SortKey =
   | 'avgFirstResponseSeconds'
   | 'lastActive';
 
-interface Column {
-  key: SortKey;
+interface MetricField {
+  key: Exclude<SortKey, 'name'>;
   label: string;
 }
 
-const COLUMNS: Record<StaffRole, Column[]> = {
+const MAX_VISIBLE_STAFF = 5;
+
+const ROLE_METRICS: Record<StaffRole, MetricField[]> = {
   evaluator: [
     { key: 'evaluationsCompleted', label: 'Evaluations completed' },
     { key: 'feedbackGiven', label: 'Feedback given' },
@@ -58,6 +60,7 @@ export class StaffActivityComponent implements OnInit {
     { role: 'adjudicator', label: 'Adjudicators' },
   ];
 
+  readonly maxVisible = MAX_VISIBLE_STAFF;
   readonly rows = signal<StaffActivityRow[]>([]);
   readonly loading = signal(true);
   readonly error = this.staffService.error;
@@ -67,7 +70,7 @@ export class StaffActivityComponent implements OnInit {
   readonly sortKey = signal<SortKey>('name');
   readonly sortDirection = signal<'asc' | 'desc'>('asc');
 
-  readonly columns = computed(() => COLUMNS[this.activeTab()]);
+  readonly metrics = computed(() => ROLE_METRICS[this.activeTab()]);
 
   readonly counts = computed(() => {
     const counts: Record<StaffRole, number> = { evaluator: 0, agent: 0, adjudicator: 0 };
@@ -86,7 +89,7 @@ export class StaffActivityComponent implements OnInit {
     ];
   });
 
-  readonly visibleRows = computed(() => {
+  private readonly filteredAndSortedRows = computed(() => {
     const role = this.activeTab();
     const query = this.search().trim().toLowerCase();
     const key = this.sortKey();
@@ -96,6 +99,20 @@ export class StaffActivityComponent implements OnInit {
       .filter(row => row.role === role)
       .filter(row => !query || row.name.toLowerCase().includes(query) || row.email.toLowerCase().includes(query))
       .sort((left, right) => this.compare(left, right, key) * direction);
+  });
+
+  readonly totalMatchingCount = computed(() => this.filteredAndSortedRows().length);
+
+  /** Capped at 5 unless the user is actively searching. */
+  readonly visibleRows = computed(() => {
+    const all = this.filteredAndSortedRows();
+    const hasQuery = this.search().trim().length > 0;
+    return hasQuery ? all : all.slice(0, MAX_VISIBLE_STAFF);
+  });
+
+  readonly hasMoreThanCap = computed(() => {
+    const hasQuery = this.search().trim().length > 0;
+    return !hasQuery && this.filteredAndSortedRows().length > MAX_VISIBLE_STAFF;
   });
 
   readonly activeTabLabel = computed(() => this.tabs.find(tab => tab.role === this.activeTab())?.label ?? '');
@@ -121,6 +138,10 @@ export class StaffActivityComponent implements OnInit {
     this.search.set((event.target as HTMLInputElement | null)?.value ?? '');
   }
 
+  clearSearch(): void {
+    this.search.set('');
+  }
+
   setSort(key: SortKey): void {
     if (this.sortKey() === key) {
       this.sortDirection.update(direction => (direction === 'asc' ? 'desc' : 'asc'));
@@ -130,21 +151,17 @@ export class StaffActivityComponent implements OnInit {
     }
   }
 
-  ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
-    if (this.sortKey() !== key) {
-      return 'none';
-    }
-    return this.sortDirection() === 'asc' ? 'ascending' : 'descending';
+  sortIcon(key: SortKey): string {
+    if (this.sortKey() !== key) return '↕';
+    return this.sortDirection() === 'asc' ? '↑' : '↓';
   }
 
-  cell(row: StaffActivityRow, key: SortKey): string {
+  metricValue(row: StaffActivityRow, key: Exclude<SortKey, 'name'>): string {
     switch (key) {
       case 'avgFirstResponseSeconds':
         return this.formatDuration(row.avgFirstResponseSeconds);
       case 'lastActive':
         return this.formatDate(row.lastActive);
-      case 'name':
-        return row.name;
       default:
         return String(row[key]);
     }
@@ -154,7 +171,6 @@ export class StaffActivityComponent implements OnInit {
     const a = this.sortValue(left, key);
     const b = this.sortValue(right, key);
 
-    // Empty values always go last.
     if (a === null && b === null) return 0;
     if (a === null) return 1;
     if (b === null) return -1;
@@ -169,23 +185,19 @@ export class StaffActivityComponent implements OnInit {
     if (key === 'lastActive') {
       return row.lastActive ? row.lastActive.getTime() : null;
     }
-    return row[key];
+    return row[key] ?? null;
   }
 
   private formatDuration(seconds: number | null): string {
-    if (seconds === null) {
-      return '—';
-    }
-    if (seconds < 60) {
-      return `${seconds}s`;
-    }
-    if (seconds < 3600) {
-      return `${Math.round(seconds / 60)} min`;
-    }
+    if (seconds === null) return '—';
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
     return `${(seconds / 3600).toFixed(1)} h`;
   }
 
   private formatDate(date: Date | null): string {
-    return date ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(date) : '—';
+    return date
+      ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+      : '—';
   }
 }

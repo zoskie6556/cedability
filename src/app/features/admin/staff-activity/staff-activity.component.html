@@ -1,83 +1,136 @@
-<section class="page-shell">
-  <p class="eyebrow">People</p>
-  <h2>Staff activity</h2>
-  <p>Track evaluator throughput, support responsiveness, and adjudicator workload.</p>
+<section class="sa-page" aria-labelledby="sa-title">
+  <header class="sa-header">
+    <div>
+      <p class="sa-eyebrow">People</p>
+      <h1 id="sa-title">Staff activity</h1>
+      <p class="sa-subtitle">Track evaluator throughput, support responsiveness, and adjudicator workload.</p>
+    </div>
+  </header>
 
   @if (error()) {
-    <p class="empty-state" role="alert">{{ error() }}</p>
+    <div class="sa-alert" role="alert">
+      <span>{{ error() }}</span>
+    </div>
   }
 
-  <div class="stats-grid">
+  <!-- 4 compact stat cards -->
+  <div class="sa-stats" aria-label="Summary statistics">
     @for (card of summaryCards(); track card.label) {
-      <article class="card">
-        <div class="card-header">
-          <strong>{{ card.label }}</strong>
-        </div>
-        <div class="stat-number">{{ card.value }}</div>
+      <article class="sa-stat-card">
+        <span class="sa-stat-label">{{ card.label }}</span>
+        <strong class="sa-stat-value">{{ card.value }}</strong>
       </article>
     }
   </div>
 
-  <div class="toolbar">
-    <div class="tabs" role="tablist" aria-label="Staff groups">
-      @for (tab of tabs; track tab.role) {
+  <div class="sa-panel">
+    <!-- Role filter pills + Search -->
+    <div class="sa-toolbar">
+      <div class="sa-tabs" role="tablist" aria-label="Staff roles">
+        @for (tab of tabs; track tab.role) {
+          <button
+            type="button"
+            role="tab"
+            class="sa-role-btn"
+            [class.is-active]="activeTab() === tab.role"
+            [attr.aria-selected]="activeTab() === tab.role"
+            (click)="selectTab(tab.role)"
+          >
+            <span>{{ tab.label }}</span>
+            <span class="sa-role-count">{{ counts()[tab.role] }}</span>
+          </button>
+        }
+      </div>
+
+      <div class="sa-search">
+        <label class="sa-sr-only" for="sa-search-input">Search by name or email</label>
+        <input
+          id="sa-search-input"
+          type="search"
+          placeholder="Search by name or email..."
+          [value]="search()"
+          (input)="onSearch($event)"
+        />
+        @if (search()) {
+          <button type="button" class="sa-clear-btn" (click)="clearSearch()" aria-label="Clear search">
+            ×
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Sort strip -->
+    <div class="sa-sort-bar" aria-label="Sort staff">
+      <span class="sa-sort-label">Sort by:</span>
+      <button
+        type="button"
+        class="sa-sort-chip"
+        [class.is-active]="sortKey() === 'name'"
+        (click)="setSort('name')"
+      >
+        Name <span>{{ sortIcon('name') }}</span>
+      </button>
+      @for (metric of metrics(); track metric.key) {
         <button
           type="button"
-          role="tab"
-          class="tab"
-          [class.active]="activeTab() === tab.role"
-          [attr.aria-selected]="activeTab() === tab.role"
-          (click)="selectTab(tab.role)"
+          class="sa-sort-chip"
+          [class.is-active]="sortKey() === metric.key"
+          (click)="setSort(metric.key)"
         >
-          {{ tab.label }}
-          <span class="count">{{ counts()[tab.role] }}</span>
+          {{ metric.label }} <span>{{ sortIcon(metric.key) }}</span>
         </button>
       }
     </div>
 
-    <label class="search-field">
-      <span class="sr-only">Search staff by name or email</span>
-      <input type="search" placeholder="Search by name or email" [value]="search()" (input)="onSearch($event)" />
-    </label>
-  </div>
+    @if (loading()) {
+      <div class="sa-state">
+        <app-idea-loader />
+        <p>Loading staff activity…</p>
+      </div>
+    } @else if (visibleRows().length === 0) {
+      <div class="sa-state">
+        @if (search().trim()) {
+          <p>No {{ activeTabLabel() }} match “{{ search().trim() }}”.</p>
+          <button type="button" class="sa-link-btn" (click)="clearSearch()">Reset search</button>
+        } @else {
+          <p>No {{ activeTabLabel() }} found. Change a user's role on the Users page to add one.</p>
+        }
+      </div>
+    } @else {
+      <ul class="sa-staff-list">
+        @for (row of visibleRows(); track row.id) {
+          <li class="sa-staff-card">
+            <div class="sa-staff-top">
+              <div class="sa-staff-identity">
+                <strong class="sa-staff-name">{{ row.name }}</strong>
+                @if (row.email) {
+                  <span class="sa-staff-email">{{ row.email }}</span>
+                }
+              </div>
+              <span class="sa-role-tag">{{ activeTabLabel() }}</span>
+            </div>
 
-  @if (loading()) {
-    <app-idea-loader label="Loading staff activity" />
-  } @else {
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col" [attr.aria-sort]="ariaSort('name')">
-              <button type="button" class="sort-button" (click)="setSort('name')">Name</button>
-            </th>
-            @for (column of columns(); track column.key) {
-              <th scope="col" [attr.aria-sort]="ariaSort(column.key)">
-                <button type="button" class="sort-button" (click)="setSort(column.key)">{{ column.label }}</button>
-              </th>
-            }
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of visibleRows(); track row.id) {
-            <tr>
-              <td>
-                <strong>{{ row.name }}</strong>
-                <div class="sub-text">{{ row.email }}</div>
-              </td>
-              @for (column of columns(); track column.key) {
-                <td>{{ cell(row, column.key) }}</td>
+            <dl class="sa-metrics-grid">
+              @for (metric of metrics(); track metric.key) {
+                <div class="sa-metric-item">
+                  <dt>{{ metric.label }}</dt>
+                  <dd>{{ metricValue(row, metric.key) }}</dd>
+                </div>
               }
-            </tr>
-          } @empty {
-            <tr>
-              <td [attr.colspan]="columns().length + 1" class="empty-state">
-                No {{ activeTabLabel() }} found. Change a user's role on the Users page to add one.
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
+            </dl>
+          </li>
+        }
+      </ul>
+
+      @if (hasMoreThanCap()) {
+        <div class="sa-search-prompt">
+          <span>
+            Showing top {{ maxVisible }} of {{ totalMatchingCount() }} {{ activeTabLabel().toLowerCase() }}.
+            Use the search box above to find a specific staff member.
+          </span>
+          <label for="sa-search-input" class="sa-prompt-action">Search now</label>
+        </div>
+      }
+    }
+  </div>
 </section>
