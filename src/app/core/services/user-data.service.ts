@@ -875,6 +875,7 @@ function parseEvaluatorIdeaView(id: string, value: unknown): EvaluatorIdeaView {
     evaluatorUid: requireString(view['evaluatorUid'], 'evaluatorUid'),
     stageId: requireString(view['stageId'], 'stageId'),
     stageName: requireString(view['stageName'], 'stageName'),
+    criteriaSetId,
     criteriaSet: parseEvaluationCriteriaSet(criteriaSetId, view['criteriaSet']),
     createdAt: requireTimestampOrNull(view['createdAt'], 'createdAt'),
     ...parseEvaluationIdeaDetails(view),

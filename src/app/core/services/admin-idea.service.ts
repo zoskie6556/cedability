@@ -118,10 +118,12 @@ export class AdminIdeaService {
     return snap.docs
       .map(document => {
         const data = document.data();
+        const evaluatorType: EvaluatorType =
+          data['evaluatorType'] === 'external' ? 'external' : 'internal';
         return {
           id: document.id,
           name: (data['displayName'] ?? data['fullName'] ?? data['email'] ?? 'Unnamed') as string,
-          evaluatorType: data['evaluatorType'] === 'external' ? 'external' : 'internal',
+          evaluatorType,
           organization: typeof data['organization'] === 'string' ? data['organization'] : null,
         };
       })
