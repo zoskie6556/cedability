@@ -47,4 +47,4 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
-/environments
+/environments/*.ts
