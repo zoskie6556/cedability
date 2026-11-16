@@ -1,0 +1,48 @@
+@if (open()) {
+  <div
+    class="voice-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="voiceAccessibilityTitle"
+    (click)="onBackdropClick()"
+  >
+    <div
+      class="voice-modal-card accessibility-theme"
+      (click)="$event.stopPropagation()"
+    >
+      <button
+        type="button"
+        class="voice-modal-close"
+        (click)="onCloseClick()"
+        aria-label="Close voice accessibility modal"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+
+      <h2 id="voiceAccessibilityTitle" class="voice-modal-title">
+        Voice Accessibility
+      </h2>
+      <p class="voice-modal-subtitle">
+        Speak or listen to draft your ideas hands-free
+      </p>
+
+      <div class="voice-modal-stage">
+        <div class="voice-modal-spinner" aria-hidden="true"></div>
+        <div class="voice-modal-orb" aria-hidden="true">
+          <span class="voice-modal-orb-core"></span>
+        </div>
+      </div>
+
+      <p class="voice-modal-status">{{ live.statusMessage() }}</p>
+
+      @if (live.draftedIdea()) {
+        <p class="voice-modal-draft" aria-live="polite">
+          {{ live.draftedIdea() }}
+        </p>
+      }
+    </div>
+  </div>
+}

@@ -31,3 +31,17 @@ export const DEFAULT_ACCESSIBILITY_VOICES: readonly AccessibilityVoice[] = [
     theme: 'deep',
   },
 ];
+
+export type VoiceSessionState =
+  | 'idle'
+  | 'connecting'
+  | 'listening'
+  | 'speaking'
+  | 'error';
+
+export interface IdeaDraftEntry {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: number;
+}
