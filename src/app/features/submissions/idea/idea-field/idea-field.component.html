@@ -1,0 +1,63 @@
+<div class="field">
+  <label [for]="id()">
+    {{ label() }}
+    @if (required()) {
+      <span class="req" aria-hidden="true">*</span>
+      <span class="sr-only">(required)</span>
+    }
+  </label>
+
+  @if (hint()) {
+    <p class="hint" [id]="hintId()">{{ hint() }}</p>
+  }
+
+  @if (multiline()) {
+    <textarea
+      [id]="id()"
+      [formControl]="control()"
+      [rows]="rows()"
+      [attr.maxlength]="maxLength()"
+      [attr.aria-describedby]="describedBy()"
+      [attr.aria-invalid]="view().error ? 'true' : null"
+      [attr.aria-required]="required() ? 'true' : null"
+    ></textarea>
+  } @else {
+    <input
+      [id]="id()"
+      [type]="type()"
+      [formControl]="control()"
+      [attr.inputmode]="type() === 'number' ? 'decimal' : null"
+      [attr.min]="type() === 'number' ? 0 : null"
+      [attr.step]="type() === 'number' ? 'any' : null"
+      [attr.maxlength]="maxLength()"
+      [attr.aria-describedby]="describedBy()"
+      [attr.aria-invalid]="view().error ? 'true' : null"
+      [attr.aria-required]="required() ? 'true' : null"
+    />
+  }
+
+  <div class="meta">
+    @if (view().error) {
+      <p class="error" [id]="errorId()">{{ view().error }}</p>
+    }
+    @if (maxLength() !== null && multiline()) {
+      <span class="count">{{ view().length }} / {{ maxLength() }}</span>
+    }
+  </div>
+
+  @if (voice() && type() === 'text') {
+    <div class="tools">
+      @if (speech.supported()) {
+        <button type="button" class="tool" [attr.aria-pressed]="listening()" (click)="toggleDictation()">
+          {{ listening() ? 'Stop speaking' : 'Speak your answer' }}
+        </button>
+      }
+      @if (speech.canSpeak()) {
+        <button type="button" class="tool" (click)="readAloud()">Listen to what I wrote</button>
+      }
+    </div>
+    @if (listening()) {
+      <p class="status" role="status">Listening… speak now.</p>
+    }
+  }
+</div>
