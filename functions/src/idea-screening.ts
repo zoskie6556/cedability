@@ -7,7 +7,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 
 const MODEL = 'gemini-3.5-flash-lite';
 const RUBRIC_VERSION = 'cedability-v1';
-const geminiApiKey = defineSecret('AQ.Ab8RN6JmOriisGUrLPEKt477JbP5-xjHjZzjJYmNCdR19y3aDg');
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
 if (getApps().length === 0) {
   initializeApp();
 }
