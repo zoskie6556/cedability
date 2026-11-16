@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { collection, Firestore, getDocs, orderBy, query, Timestamp } from '@angular/fire/firestore';
 import { Functions, httpsCallable } from '@angular/fire/functions';
+import type { EvaluatorType } from '../../shared/models/idea-evaluation.model';
 import { AdminUser, AdminUserRole } from '../../features/admin/models/admin-user.model';
 
 interface CreateUserRequest {
@@ -8,6 +9,8 @@ interface CreateUserRequest {
   email: string;
   phone?: string;
   role: AdminUserRole;
+  evaluatorType?: EvaluatorType;
+  organization?: string;
 }
 
 interface UpdateRoleRequest {
@@ -90,7 +93,8 @@ export class AdminUserService {
   private mapUser(uid: string, data: Record<string, unknown>): AdminUser {
     const role = this.normaliseRole(data['role']);
     const isActive = data['isActive'] !== false;
-    const name = typeof data['fullName'] === 'string' && data['fullName'].trim() ? data['fullName'] : 'Unknown user';
+    const rawName = data['fullName'] ?? data['displayName'];
+    const name = typeof rawName === 'string' && rawName.trim() ? rawName : 'Unknown user';
     const email = typeof data['email'] === 'string' ? data['email'] : `${uid}@unknown.local`;
     const phone = typeof data['phone'] === 'string' && data['phone'].trim() ? data['phone'] : undefined;
 
@@ -100,6 +104,13 @@ export class AdminUserService {
       email,
       phone,
       role,
+      evaluatorType:
+        role === 'evaluator'
+          ? data['evaluatorType'] === 'external'
+            ? 'external'
+            : 'internal'
+          : null,
+      organization: typeof data['organization'] === 'string' ? data['organization'] : null,
       status: isActive ? 'active' : 'disabled',
       emailVerified: Boolean(data['emailVerified']),
       createdAt: this.formatDate(data['createdAt']),

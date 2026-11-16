@@ -69,6 +69,51 @@ function normaliseOptionalPhone(value: unknown): string | undefined {
   return phone || undefined;
 }
 
+function normaliseEvaluatorType(
+  value: unknown,
+  role: AdminRole,
+): 'internal' | 'external' | null {
+  if (role !== 'evaluator') {
+    if (value !== undefined && value !== null) {
+      throw new HttpsError('invalid-argument', 'Evaluator type is only valid for evaluator accounts.');
+    }
+    return null;
+  }
+
+  if (value === undefined || value === null || value === '') {
+    return 'internal';
+  }
+  if (value === 'internal' || value === 'external') {
+    return value;
+  }
+
+  throw new HttpsError('invalid-argument', 'Evaluator type must be internal or external.');
+}
+
+function normaliseEvaluatorOrganization(value: unknown, role: AdminRole, evaluatorType: 'internal' | 'external' | null): string | null {
+  if (role !== 'evaluator') {
+    if (value !== undefined && value !== null && value !== '') {
+      throw new HttpsError('invalid-argument', 'Organization is only valid for evaluator accounts.');
+    }
+    return null;
+  }
+  if (value === undefined || value === null || value === '') {
+    if (evaluatorType === 'external') {
+      throw new HttpsError('invalid-argument', 'An organization is required for external evaluators.');
+    }
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new HttpsError('invalid-argument', 'Organization must be a string.');
+  }
+
+  const organization = value.trim();
+  if (!organization || organization.length > 160) {
+    throw new HttpsError('invalid-argument', 'Organization must be between 1 and 160 characters.');
+  }
+  return organization;
+}
+
 export async function createUserAccount(
   request: CallableRequest<Record<string, unknown>>,
 ): Promise<{ uid: string; email: string; link: string }> {
@@ -77,6 +122,12 @@ export async function createUserAccount(
   const email = normaliseString(request.data.email, 'email').toLowerCase();
   const phone = normaliseOptionalPhone(request.data.phone);
   const role = normaliseRole(request.data.role);
+  const evaluatorType = normaliseEvaluatorType(request.data.evaluatorType, role);
+  const organization = normaliseEvaluatorOrganization(
+    request.data.organization,
+    role,
+    evaluatorType,
+  );
 
   const user = await getAuth().createUser({
     email,
@@ -92,6 +143,8 @@ export async function createUserAccount(
       displayName,
       email,
       role,
+      evaluatorType,
+      organization,
       phone: phone ?? null,
       isActive: true,
       emailVerified: false,
@@ -127,7 +180,18 @@ export async function setUserRole(
   }
 
   const targetDoc = await getFirestore().doc(`users/${uid}`).get();
-  const targetRole = targetDoc.exists ? targetDoc.data()?.role : undefined;
+  const targetData = targetDoc.exists ? targetDoc.data() : undefined;
+  const targetRole = targetData?.role;
+  const evaluatorType =
+    role === 'evaluator'
+      ? targetData?.evaluatorType === 'external'
+        ? 'external'
+        : 'internal'
+      : null;
+  const organization =
+    role === 'evaluator' && evaluatorType === 'external' && typeof targetData?.organization === 'string'
+      ? targetData.organization
+      : null;
   const remainingAdmins = await getAuth().listUsers();
   const adminCount = remainingAdmins.users.filter(user => user.customClaims?.role === 'admin').length;
   if (targetRole === 'admin' && role !== 'admin' && adminCount <= 1) {
@@ -139,6 +203,8 @@ export async function setUserRole(
   await getFirestore().doc(`users/${uid}`).set(
     {
       role,
+      evaluatorType,
+      organization,
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },

@@ -11,6 +11,7 @@ import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea
 import { AdminUserService } from '../../../core/services/admin-user.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AdminUser, AdminUserRole } from '../models/admin-user.model';
+import type { EvaluatorType } from '../../../shared/models/idea-evaluation.model';
 
 @Component({
   selector: 'app-admin-users',
@@ -28,6 +29,7 @@ export class UsersComponent implements OnInit {
   readonly isLoading = signal(true);
   readonly searchTerm = signal('');
   readonly roleFilter = signal<'all' | AdminUserRole>('all');
+  readonly createEvaluatorFieldsVisible = signal(false);
 
   readonly filteredUsers = computed(() => {
     const query = this.searchTerm().trim().toLowerCase();
@@ -49,6 +51,8 @@ export class UsersComponent implements OnInit {
     email: ['', [Validators.required, Validators.email]],
     phone: ['', Validators.pattern(/^(?:\+[1-9]\d{1,14})?$/)],
     role: ['submitter' as AdminUserRole, Validators.required],
+    evaluatorType: ['internal' as EvaluatorType],
+    organization: [''],
   });
 
   ngOnInit(): void {
@@ -71,6 +75,11 @@ export class UsersComponent implements OnInit {
     this.roleFilter.set(value === 'all' ? 'all' : (value as AdminUserRole));
   }
 
+  onCreateRoleChange(event: Event): void {
+    const target = event.target as HTMLSelectElement | null;
+    this.createEvaluatorFieldsVisible.set(target?.value === 'evaluator');
+  }
+
   async createUser(): Promise<void> {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -78,7 +87,12 @@ export class UsersComponent implements OnInit {
       return;
     }
 
-    const { name, email, phone, role } = this.form.getRawValue();
+    const { name, email, phone, role, evaluatorType, organization } = this.form.getRawValue();
+    if (role === 'evaluator' && evaluatorType === 'external' && !organization.trim()) {
+      this.form.controls.organization.markAsTouched();
+      this.toastService.error('Enter the external evaluator organization.');
+      return;
+    }
 
     try {
       this.isLoading.set(true);
@@ -87,8 +101,15 @@ export class UsersComponent implements OnInit {
         email,
         phone: phone || undefined,
         role,
+        evaluatorType: role === 'evaluator' ? evaluatorType : undefined,
+        organization: role === 'evaluator' ? organization.trim() || undefined : undefined,
       });
-      this.form.reset({ role: 'submitter' as AdminUserRole });
+      this.form.reset({
+        role: 'submitter' as AdminUserRole,
+        evaluatorType: 'internal' as EvaluatorType,
+        organization: '',
+      });
+      this.createEvaluatorFieldsVisible.set(false);
       await this.loadUsers();
       this.toastService.success(`Created account for ${email}.`);
     } catch (error) {

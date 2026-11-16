@@ -1,13 +1,19 @@
 ﻿// ===============================================================
 // Assumed Data Model
-// users/{uid}: private account fields, role and profile map. Clients create
+// users/{uid}: private account fields, role, evaluator type/organization and profile map. Clients create
 // submitter records and may update only validated profile fields; admins can
 // read user records for the admin user-management workflow.
 // ideas/{ideaId}: one submitted idea with ownerId, plans, timestamps and
 // server-managed category, similarityCheck and automatedReview results.
 // Clients can only create the fixed queued review envelope and cannot update
 // or delete ideas.
-// ideas/{ideaId}/questions/{questionId}: evaluator question and owner response.
+// ideas/{ideaId}/evaluatorViews/{assignmentId}: sanitized idea fields, scoring
+// criteria and stage data for one external evaluator assignment.
+// ideas/{ideaId}/evaluations/{stageId_evaluatorUid}: validated scores and
+// recommendation; submitters cannot read evaluations.
+// ideas/{ideaId}/questions/{questionId}: stage-scoped evaluator question and owner response.
+// assignments/{ideaId_stageId_evaluatorUid}: evaluator worklist and submission state.
+// stages/{stageId}, criteriaSets/{criteriaSetId}: admin-managed evaluation configuration.
 // stats/{docId}: server-written aggregates. auditLogs/{logId}: server-written
 // audit events. Admin SDK writes bypass these client rules.
 // collaborationProfiles/{uid}: opt-in directory projection containing only
@@ -37,13 +43,296 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.role in ['evaluator', 'adjudicator', 'admin'];
     }
 
+    function isExternalEvaluator() {
+      return request.auth != null
+        && request.auth.token.role == 'evaluator'
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.get('evaluatorType', 'internal') == 'external';
+    }
+
+    function isInternalEvaluator() {
+      return isEvaluator() && !isExternalEvaluator();
+    }
+
+    function isAssignedToIdeaStage(ideaId, stageId, evaluatorUid) {
+      let assignmentPath = /databases/$(database)/documents/assignments/$(ideaId + '_' + stageId + '_' + evaluatorUid);
+      return evaluatorUid is string
+        && stageId is string
+        && exists(assignmentPath)
+        && get(assignmentPath).data.ideaId == ideaId
+        && get(assignmentPath).data.stageId == stageId
+        && get(assignmentPath).data.evaluatorUid == evaluatorUid;
+    }
+
+    function isAssignmentForIdea(assignmentId, ideaId, evaluatorUid) {
+      let assignmentPath = /databases/$(database)/documents/assignments/$(assignmentId);
+      return exists(assignmentPath)
+        && get(assignmentPath).data.ideaId == ideaId
+        && get(assignmentPath).data.evaluatorUid == evaluatorUid;
+    }
+
+    function isAssignmentOpen(ideaId, stageId, evaluatorUid) {
+      let assignmentPath = /databases/$(database)/documents/assignments/$(ideaId + '_' + stageId + '_' + evaluatorUid);
+      return isAssignedToIdeaStage(ideaId, stageId, evaluatorUid)
+        && get(assignmentPath).data.status in ['pending', 'in_progress'];
+    }
+
+    function isExternalEvaluatorAccount(uid) {
+      let userPath = /databases/$(database)/documents/users/$(uid);
+      return exists(userPath)
+        && get(userPath).data.role == 'evaluator'
+        && get(userPath).data.get('evaluatorType', 'internal') == 'external';
+    }
+
+    function isValidAssignment(data, assignmentId) {
+      return data is map
+        && data.keys().hasAll([
+          'ideaId', 'stageId', 'evaluatorUid', 'status', 'assignedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ideaId', 'stageId', 'evaluatorUid', 'status', 'dueAt', 'assignedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.ideaId is string && data.ideaId.size() > 0 && data.ideaId.size() <= 128
+        && data.stageId is string && data.stageId.size() > 0 && data.stageId.size() <= 80
+        && data.evaluatorUid is string && data.evaluatorUid.size() > 0 && data.evaluatorUid.size() <= 128
+        && assignmentId == data.ideaId + '_' + data.stageId + '_' + data.evaluatorUid
+        && data.status in ['pending', 'in_progress', 'done']
+        && data.assignedBy is string && data.assignedBy.size() > 0 && data.assignedBy.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (!('dueAt' in data) || data.dueAt == null || data.dueAt is timestamp);
+    }
+
+    function isValidCriterion(criteria, index) {
+      return criteria.size() <= index
+        || (criteria[index] is map
+          && criteria[index].keys().hasAll(['id', 'label', 'description', 'maxScore', 'weight'])
+          && criteria[index].keys().hasOnly(['id', 'label', 'description', 'maxScore', 'weight'])
+          && criteria[index].id is string
+          && criteria[index].id.size() > 0
+          && criteria[index].id.size() <= 60
+          && criteria[index].label is string
+          && criteria[index].label.size() > 0
+          && criteria[index].label.size() <= 120
+          && criteria[index].description is string
+          && criteria[index].description.size() <= 1000
+          && criteria[index].maxScore is number
+          && criteria[index].maxScore > 0
+          && criteria[index].maxScore <= 100
+          && criteria[index].weight is number
+          && criteria[index].weight > 0
+          && criteria[index].weight <= 100);
+    }
+
+    function validCriterionScore(criteria, scores, index) {
+      return criteria.size() <= index
+        || (isValidCriterion(criteria, index)
+          && criteria[index].id in scores
+          && scores[criteria[index].id] is number
+          && scores[criteria[index].id] >= 0
+          && scores[criteria[index].id] <= criteria[index].maxScore);
+    }
+
+    function isValidCriteriaSet(data) {
+      return data is map
+        && data.keys().hasAll(['name', 'criteria'])
+        && data.keys().hasOnly(['name', 'criteria'])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.criteria is list
+        && data.criteria.size() > 0
+        && data.criteria.size() <= 10
+        && isValidCriterion(data.criteria, 0)
+        && isValidCriterion(data.criteria, 1)
+        && isValidCriterion(data.criteria, 2)
+        && isValidCriterion(data.criteria, 3)
+        && isValidCriterion(data.criteria, 4)
+        && isValidCriterion(data.criteria, 5)
+        && isValidCriterion(data.criteria, 6)
+        && isValidCriterion(data.criteria, 7)
+        && isValidCriterion(data.criteria, 8)
+        && isValidCriterion(data.criteria, 9);
+    }
+
+    function isValidStage(data) {
+      return data is map
+        && data.keys().hasAll([
+          'name', 'order', 'criteriaSetId', 'evaluatorUids', 'requiresAdjudication', 'isActive'
+        ])
+        && data.keys().hasOnly([
+          'name', 'order', 'criteriaSetId', 'evaluatorUids', 'requiresAdjudication', 'isActive'
+        ])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.order is int && data.order >= 0 && data.order <= 1000
+        && data.criteriaSetId is string
+        && data.criteriaSetId.size() > 0 && data.criteriaSetId.size() <= 128
+        && data.evaluatorUids is list && data.evaluatorUids.size() <= 10
+        && (data.evaluatorUids.size() < 1 || (data.evaluatorUids[0] is string && data.evaluatorUids[0].size() > 0 && data.evaluatorUids[0].size() <= 128))
+        && (data.evaluatorUids.size() < 2 || (data.evaluatorUids[1] is string && data.evaluatorUids[1].size() > 0 && data.evaluatorUids[1].size() <= 128))
+        && (data.evaluatorUids.size() < 3 || (data.evaluatorUids[2] is string && data.evaluatorUids[2].size() > 0 && data.evaluatorUids[2].size() <= 128))
+        && (data.evaluatorUids.size() < 4 || (data.evaluatorUids[3] is string && data.evaluatorUids[3].size() > 0 && data.evaluatorUids[3].size() <= 128))
+        && (data.evaluatorUids.size() < 5 || (data.evaluatorUids[4] is string && data.evaluatorUids[4].size() > 0 && data.evaluatorUids[4].size() <= 128))
+        && (data.evaluatorUids.size() < 6 || (data.evaluatorUids[5] is string && data.evaluatorUids[5].size() > 0 && data.evaluatorUids[5].size() <= 128))
+        && (data.evaluatorUids.size() < 7 || (data.evaluatorUids[6] is string && data.evaluatorUids[6].size() > 0 && data.evaluatorUids[6].size() <= 128))
+        && (data.evaluatorUids.size() < 8 || (data.evaluatorUids[7] is string && data.evaluatorUids[7].size() > 0 && data.evaluatorUids[7].size() <= 128))
+        && (data.evaluatorUids.size() < 9 || (data.evaluatorUids[8] is string && data.evaluatorUids[8].size() > 0 && data.evaluatorUids[8].size() <= 128))
+        && (data.evaluatorUids.size() < 10 || (data.evaluatorUids[9] is string && data.evaluatorUids[9].size() > 0 && data.evaluatorUids[9].size() <= 128))
+        && data.requiresAdjudication is bool
+        && data.isActive is bool;
+    }
+
+    function criterionWeight(criteria, index) {
+      return criteria.size() > index ? criteria[index].weight : 0;
+    }
+
+    function criterionContribution(criteria, scores, index) {
+      return criteria.size() > index
+        ? criteria[index].weight * scores[criteria[index].id] / criteria[index].maxScore
+        : 0;
+    }
+
+    function validWeightedTotal(criteria, scores, total) {
+      let weights = criterionWeight(criteria, 0) + criterionWeight(criteria, 1)
+        + criterionWeight(criteria, 2) + criterionWeight(criteria, 3)
+        + criterionWeight(criteria, 4) + criterionWeight(criteria, 5)
+        + criterionWeight(criteria, 6) + criterionWeight(criteria, 7)
+        + criterionWeight(criteria, 8) + criterionWeight(criteria, 9);
+      let earned = criterionContribution(criteria, scores, 0) + criterionContribution(criteria, scores, 1)
+        + criterionContribution(criteria, scores, 2) + criterionContribution(criteria, scores, 3)
+        + criterionContribution(criteria, scores, 4) + criterionContribution(criteria, scores, 5)
+        + criterionContribution(criteria, scores, 6) + criterionContribution(criteria, scores, 7)
+        + criterionContribution(criteria, scores, 8) + criterionContribution(criteria, scores, 9);
+      return weights > 0
+        && total is number
+        && total >= 0
+        && total <= 100
+        && math.abs(total - math.round(earned / weights * 10000) / 100) < 0.001;
+    }
+
+    function isValidEvaluationScores(stageId, scores, total) {
+      let stagePath = /databases/$(database)/documents/stages/$(stageId);
+      let stage = get(stagePath).data;
+      let criteriaSetPath = /databases/$(database)/documents/criteriaSets/$(stage.criteriaSetId);
+      let criteriaSet = get(criteriaSetPath).data;
+      let criteria = criteriaSet.criteria;
+      return exists(stagePath)
+        && stage.criteriaSetId is string
+        && exists(criteriaSetPath)
+        && criteriaSet is map
+        && criteriaSet.keys().hasAll(['name', 'criteria'])
+        && criteriaSet.keys().hasOnly(['name', 'criteria'])
+        && criteriaSet.name is string
+        && criteriaSet.name.size() > 0
+        && criteriaSet.name.size() <= 120
+        && criteria is list
+        && criteria.size() > 0
+        && criteria.size() <= 10
+        && scores is map
+        && scores.keys().size() == criteria.size()
+        && validCriterionScore(criteria, scores, 0)
+        && validCriterionScore(criteria, scores, 1)
+        && validCriterionScore(criteria, scores, 2)
+        && validCriterionScore(criteria, scores, 3)
+        && validCriterionScore(criteria, scores, 4)
+        && validCriterionScore(criteria, scores, 5)
+        && validCriterionScore(criteria, scores, 6)
+        && validCriterionScore(criteria, scores, 7)
+        && validCriterionScore(criteria, scores, 8)
+        && validCriterionScore(criteria, scores, 9)
+        && validWeightedTotal(criteria, scores, total);
+    }
+
+    function isValidEvaluation(data, evaluationId, ideaId, stageId, evaluatorUid) {
+      return data is map
+        && data.keys().hasAll([
+          'stageId', 'evaluatorUid', 'scores', 'comments', 'recommendation', 'total', 'submittedAt'
+        ])
+        && data.keys().hasOnly([
+          'stageId', 'evaluatorUid', 'scores', 'comments', 'recommendation', 'total', 'submittedAt'
+        ])
+        && evaluationId == stageId + '_' + evaluatorUid
+        && data.stageId == stageId
+        && data.evaluatorUid == evaluatorUid
+        && data.comments is string
+        && data.comments.size() <= 5000
+        && data.recommendation in ['advance', 'revise', 'decline']
+        && data.submittedAt == request.time
+        && isValidEvaluationScores(stageId, data.scores, data.total);
+    }
+
+    function hasValidEvaluationAfter(ideaId, stageId, evaluatorUid) {
+      let evaluationId = stageId + '_' + evaluatorUid;
+      let evaluationPath = /databases/$(database)/documents/ideas/$(ideaId)/evaluations/$(evaluationId);
+      return existsAfter(evaluationPath)
+        && isValidEvaluation(
+          getAfter(evaluationPath).data,
+          evaluationId,
+          ideaId,
+          stageId,
+          evaluatorUid
+        );
+    }
+
+    function isValidEvaluatorView(ideaId, assignmentId) {
+      let view = request.resource.data;
+      let ideaPath = /databases/$(database)/documents/ideas/$(ideaId);
+      let assignmentPath = /databases/$(database)/documents/assignments/$(assignmentId);
+      let stagePath = /databases/$(database)/documents/stages/$(view.stageId);
+      let idea = get(ideaPath).data;
+      let assignment = getAfter(assignmentPath).data;
+      let stage = get(stagePath).data;
+      let criteriaSetPath = /databases/$(database)/documents/criteriaSets/$(stage.criteriaSetId);
+      let criteriaSet = get(criteriaSetPath).data;
+      return view.keys().hasAll([
+          'ideaId', 'assignmentId', 'evaluatorUid', 'stageId', 'stageName', 'criteriaSetId',
+          'criteriaSet', 'title', 'category', 'problem', 'proposedSolution', 'intendedBeneficiaries',
+          'plannedLocation', 'marketPlan', 'feasibilityPlan', 'financingPlan', 'milestones',
+          'automatedReview', 'createdAt'
+        ])
+        && view.keys().hasOnly([
+          'ideaId', 'assignmentId', 'evaluatorUid', 'stageId', 'stageName', 'criteriaSetId',
+          'criteriaSet', 'title', 'category', 'problem', 'proposedSolution', 'intendedBeneficiaries',
+          'plannedLocation', 'marketPlan', 'feasibilityPlan', 'financingPlan', 'milestones',
+          'automatedReview', 'createdAt'
+        ])
+        && view.ideaId == ideaId
+        && view.assignmentId == assignmentId
+        && view.evaluatorUid == assignment.evaluatorUid
+        && isExternalEvaluatorAccount(view.evaluatorUid)
+        && assignment.ideaId == ideaId
+        && assignment.stageId == view.stageId
+        && assignment.status == 'pending'
+        && view.stageName == stage.name
+        && view.criteriaSetId == stage.criteriaSetId
+        && view.criteriaSet is map
+        && view.criteriaSet.keys().hasAll(['id', 'name', 'criteria'])
+        && view.criteriaSet.keys().hasOnly(['id', 'name', 'criteria'])
+        && view.criteriaSet.id == stage.criteriaSetId
+        && view.criteriaSet.name == criteriaSet.name
+        && view.criteriaSet.criteria == criteriaSet.criteria
+        && view.title == idea.title
+        && view.category == idea.get('category', null)
+        && view.problem == idea.problem
+        && view.proposedSolution == idea.proposedSolution
+        && view.intendedBeneficiaries == idea.intendedBeneficiaries
+        && view.plannedLocation == idea.plannedLocation
+        && view.marketPlan == idea.marketPlan
+        && view.feasibilityPlan == idea.feasibilityPlan
+        && view.financingPlan == idea.financingPlan
+        && view.milestones == idea.milestones
+        && view.automatedReview == idea.automatedReview
+        && view.createdAt == request.time;
+    }
+
     function isAgent() {
       return request.auth != null && request.auth.token.role in ['agent', 'admin'];
     }
 
     function canReadIdea(ownerId) {
       return request.auth != null
-        && (request.auth.uid == ownerId || isEvaluator());
+        && (request.auth.uid == ownerId || isInternalEvaluator());
     }
 
     function isBoundedString(value, maxLength) {
@@ -124,9 +413,10 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
-    function isValidNewQuestion() {
+    function isValidNewQuestion(ideaId) {
       return request.resource.data.keys().hasAll([
           'askedBy',
+          'stageId',
           'question',
           'createdAt',
           'response',
@@ -135,6 +425,7 @@ service cloud.firestore {
         ])
         && request.resource.data.keys().hasOnly([
           'askedBy',
+          'stageId',
           'question',
           'createdAt',
           'response',
@@ -142,6 +433,14 @@ service cloud.firestore {
           'respondedAt'
         ])
         && request.resource.data.askedBy == request.auth.uid
+        && (request.resource.data.stageId == null
+          || (request.resource.data.stageId is string
+            && (isInternalEvaluator()
+              || isAssignedToIdeaStage(ideaId, request.resource.data.stageId, request.auth.uid))))
+        && (isInternalEvaluator()
+          || (isExternalEvaluator()
+            && request.resource.data.stageId is string
+            && isAssignedToIdeaStage(ideaId, request.resource.data.stageId, request.auth.uid)))
         && isBoundedString(request.resource.data.question, 2000)
         && request.resource.data.question.size() > 0
         && request.resource.data.createdAt == request.time
@@ -312,6 +611,8 @@ service cloud.firestore {
           'emailVerified',
           'phoneNumberVerified',
           'role',
+          'evaluatorType',
+          'organization',
           'profile',
           'createdAt',
           'updatedAt'
@@ -323,6 +624,8 @@ service cloud.firestore {
           'emailVerified',
           'phoneNumberVerified',
           'role',
+          'evaluatorType',
+          'organization',
           'profile',
           'createdAt',
           'updatedAt'
@@ -335,6 +638,8 @@ service cloud.firestore {
         && request.resource.data.emailVerified is bool
         && request.resource.data.phoneNumberVerified is bool
         && request.resource.data.role in ['user', 'submitter']
+        && request.resource.data.evaluatorType == null
+        && request.resource.data.organization == null
         && isValidProfile(request.resource.data.profile)
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp;
@@ -712,6 +1017,42 @@ service cloud.firestore {
       allow get, list: if canReadIdea(resource.data.ownerId);
       allow update, delete: if false;
 
+      match /evaluatorViews/{assignmentId} {
+        allow get: if isAdmin()
+          || (isExternalEvaluator()
+            && isAssignmentForIdea(assignmentId, ideaId, request.auth.uid));
+        allow list: if false;
+        allow create: if isAdmin() && isValidEvaluatorView(ideaId, assignmentId);
+        allow update: if false;
+        allow delete: if isAdmin()
+          && !existsAfter(/databases/$(database)/documents/assignments/$(assignmentId));
+      }
+
+      match /evaluations/{evaluationId} {
+        allow get: if isAdmin()
+          || (request.auth != null && request.auth.token.role == 'adjudicator')
+          || (isInternalEvaluator()
+            && isAssignedToIdeaStage(ideaId, resource.data.stageId, request.auth.uid))
+          || (isExternalEvaluator()
+            && resource.data.evaluatorUid == request.auth.uid
+            && isAssignedToIdeaStage(ideaId, resource.data.stageId, request.auth.uid));
+        allow list: if isAdmin()
+          || (request.auth != null && request.auth.token.role == 'adjudicator')
+          || (isInternalEvaluator()
+            && isAssignedToIdeaStage(ideaId, resource.data.stageId, request.auth.uid));
+        allow create: if isEvaluator()
+          && request.resource.data.evaluatorUid == request.auth.uid
+          && isAssignmentOpen(ideaId, request.resource.data.stageId, request.auth.uid)
+          && isValidEvaluation(
+            request.resource.data,
+            evaluationId,
+            ideaId,
+            request.resource.data.stageId,
+            request.auth.uid
+          );
+        allow update, delete: if false;
+      }
+
       match /questions/{questionId} {
         function parentIdeaExists() {
           return exists(/databases/$(database)/documents/ideas/$(ideaId));
@@ -721,15 +1062,75 @@ service cloud.firestore {
           return get(/databases/$(database)/documents/ideas/$(ideaId)).data.ownerId;
         }
 
-        allow get, list: if canReadIdea(parentIdeaOwnerId());
+        allow get: if signedInAs(parentIdeaOwnerId())
+          || isInternalEvaluator()
+          || (isExternalEvaluator()
+            && resource.data.stageId is string
+            && isAssignedToIdeaStage(ideaId, resource.data.stageId, request.auth.uid));
+        allow list: if signedInAs(parentIdeaOwnerId())
+          || isInternalEvaluator()
+          || (isExternalEvaluator()
+            && resource.data.stageId is string
+            && isAssignedToIdeaStage(ideaId, resource.data.stageId, request.auth.uid));
         allow create: if parentIdeaExists()
           && isEvaluator()
-          && isValidNewQuestion();
+          && isValidNewQuestion(ideaId);
         allow update: if signedInAs(parentIdeaOwnerId())
           && isUser()
           && isValidQuestionResponse();
         allow delete: if false;
       }
+    }
+
+    match /assignments/{assignmentId} {
+      allow get: if isAdmin()
+        || (isEvaluator() && resource.data.evaluatorUid == request.auth.uid);
+      allow list: if isAdmin()
+        || (isEvaluator() && resource.data.evaluatorUid == request.auth.uid);
+      allow create: if isAdmin()
+        && isValidAssignment(request.resource.data, assignmentId)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && exists(/databases/$(database)/documents/ideas/$(request.resource.data.ideaId))
+        && exists(/databases/$(database)/documents/stages/$(request.resource.data.stageId))
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.evaluatorUid))
+        && get(/databases/$(database)/documents/users/$(request.resource.data.evaluatorUid)).data.role == 'evaluator';
+      allow update: if isEvaluator()
+        && isValidAssignment(request.resource.data, assignmentId)
+        && resource.data.evaluatorUid == request.auth.uid
+        && resource.data.status in ['pending', 'in_progress']
+        && request.resource.data.status == 'done'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.ideaId == resource.data.ideaId
+        && request.resource.data.stageId == resource.data.stageId
+        && request.resource.data.evaluatorUid == resource.data.evaluatorUid
+        && request.resource.data.assignedBy == resource.data.assignedBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.dueAt == resource.data.get('dueAt', null)
+        && request.resource.data.updatedAt == request.time
+        && hasValidEvaluationAfter(resource.data.ideaId, resource.data.stageId, request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    match /stages/{stageId} {
+      allow get, list: if isAdmin() || isInternalEvaluator();
+      allow create: if isAdmin() && isValidStage(request.resource.data);
+      allow update: if isAdmin()
+        && isValidStage(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'order', 'criteriaSetId', 'evaluatorUids', 'requiresAdjudication', 'isActive'
+        ]);
+      allow delete: if isAdmin();
+    }
+
+    match /criteriaSets/{criteriaSetId} {
+      allow get, list: if isAdmin() || isInternalEvaluator();
+      allow create: if isAdmin() && isValidCriteriaSet(request.resource.data);
+      allow update: if isAdmin()
+        && isValidCriteriaSet(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'criteria']);
+      allow delete: if isAdmin();
     }
 
     match /stats/{docId} {

@@ -1,6 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
-import { AdminIdeaRow, AdminIdeaService, EvaluatorOption, IdeaAssignment } from '../../../core/services/admin-idea.service';
+import {
+  AdminIdeaAssignment,
+  AdminIdeaRow,
+  AdminIdeaService,
+  EvaluatorOption,
+} from '../../../core/services/admin-idea.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { IDEA_STATUSES, STAGES, type IdeaStatus } from '../../../shared/workflow/idea-workflow';
 
@@ -57,7 +62,7 @@ export class IdeasComponent implements OnInit {
 
   /** ideaId -> assignments, rebuilt whenever assignments change. */
   private readonly assignmentsByIdea = computed(() => {
-    const map = new Map<string, IdeaAssignment[]>();
+    const map = new Map<string, AdminIdeaAssignment[]>();
     for (const assignment of this.service.assignments()) {
       const list = map.get(assignment.ideaId) ?? [];
       list.push(assignment);
@@ -116,7 +121,7 @@ export class IdeasComponent implements OnInit {
     }
   }
 
-  async onRemoveAssignment(assignment: IdeaAssignment): Promise<void> {
+  async onRemoveAssignment(assignment: AdminIdeaAssignment): Promise<void> {
     try {
       await this.service.removeAssignment(assignment.id);
       this.toast.success('Assignment removed.');
@@ -127,7 +132,7 @@ export class IdeasComponent implements OnInit {
 
   // ---- Helpers used by the template ----
 
-  assignmentsFor(idea: AdminIdeaRow): IdeaAssignment[] {
+  assignmentsFor(idea: AdminIdeaRow): AdminIdeaAssignment[] {
     return this.assignmentsByIdea().get(idea.id) ?? [];
   }
 

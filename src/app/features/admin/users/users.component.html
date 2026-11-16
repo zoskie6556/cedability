@@ -43,6 +43,8 @@
           <th>Email</th>
           <th>Phone</th>
           <th>Role</th>
+          <th>Evaluator type</th>
+          <th>Organization</th>
           <th>Status</th>
           <th>Verified</th>
           <th>Created</th>
@@ -72,6 +74,8 @@
                 </select>
               </label>
             </td>
+            <td>{{ user.evaluatorType ?? '—' }}</td>
+            <td>{{ user.organization ?? '—' }}</td>
             <td>
               <span class="status-pill" [class.disabled]="user.status === 'disabled'">{{
                 user.status
@@ -96,7 +100,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="9" class="empty-state">No users match the current filters.</td>
+            <td colspan="11" class="empty-state">No users match the current filters.</td>
           </tr>
         }
       </tbody>
@@ -128,7 +132,7 @@
 
       <label>
         <span>Role</span>
-        <select formControlName="role">
+        <select formControlName="role" (change)="onCreateRoleChange($event)">
           <option value="submitter">User</option>
           <option value="evaluator">Evaluator</option>
           <option value="adjudicator">Adjudicator</option>
@@ -137,6 +141,28 @@
         </select>
       </label>
     </div>
+
+    @if (createEvaluatorFieldsVisible()) {
+      <div class="field-row">
+        <label>
+          <span>Evaluator type</span>
+          <select formControlName="evaluatorType">
+            <option value="internal">Internal</option>
+            <option value="external">External</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Organization</span>
+          <input
+            formControlName="organization"
+            type="text"
+            maxlength="160"
+            placeholder="Required for external evaluators"
+          />
+        </label>
+      </div>
+    }
 
     <div class="form-actions">
       <button type="submit" class="primary-button">Create</button>

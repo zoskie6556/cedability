@@ -1,0 +1,268 @@
+<main class="evaluation-page" id="main-content">
+  <div class="evaluation-shell">
+    <a class="back-link" routerLink="/evaluation/worklist">Back to assignments</a>
+
+    @if (isLoading()) {
+      <app-idea-loader label="Loading the assigned idea and scoring criteria" />
+    } @else if (loadError()) {
+      <section class="state-card" role="alert">
+        <h1>Evaluation unavailable</h1>
+        <p>{{ loadError() }}</p>
+        <a class="secondary-button" routerLink="/evaluation/worklist">Return to assignments</a>
+      </section>
+    } @else if (context(); as evaluation) {
+      <header class="page-heading">
+        <p class="eyebrow">{{ evaluation.stageName }} · Due {{ formatDueDate(evaluation) }}</p>
+        <h1>{{ evaluation.idea.title }}</h1>
+        <p>Category: {{ evaluation.idea.category ?? 'Not classified' }}</p>
+      </header>
+
+      <section class="plan-card" aria-labelledby="idea-plan-title">
+        <h2 id="idea-plan-title">Idea plan</h2>
+        <div class="plan-grid">
+          <section>
+            <h3>Problem</h3>
+            <p>{{ evaluation.idea.problem }}</p>
+          </section>
+          <section>
+            <h3>Proposed solution</h3>
+            <p>{{ evaluation.idea.proposedSolution }}</p>
+          </section>
+          <section>
+            <h3>Beneficiaries and location</h3>
+            <p><strong>Beneficiaries:</strong> {{ evaluation.idea.intendedBeneficiaries }}</p>
+            <p><strong>Planned location:</strong> {{ evaluation.idea.plannedLocation }}</p>
+          </section>
+          <section>
+            <h3>Market plan</h3>
+            <p><strong>Target market:</strong> {{ evaluation.idea.marketPlan.targetMarket }}</p>
+            <p><strong>Alternatives:</strong> {{ evaluation.idea.marketPlan.alternatives }}</p>
+            <p><strong>Differentiation:</strong> {{ evaluation.idea.marketPlan.differentiation }}</p>
+            <p><strong>Validation:</strong> {{ evaluation.idea.marketPlan.marketValidation }}</p>
+          </section>
+          <section>
+            <h3>Feasibility plan</h3>
+            <p><strong>Technical approach:</strong> {{ evaluation.idea.feasibilityPlan.technicalApproach }}</p>
+            <p><strong>Operations:</strong> {{ evaluation.idea.feasibilityPlan.operationalPlan }}</p>
+            <p><strong>Validation evidence:</strong> {{ evaluation.idea.feasibilityPlan.validationEvidence }}</p>
+            <p><strong>Assumptions:</strong> {{ evaluation.idea.feasibilityPlan.assumptions }}</p>
+            <p><strong>Risks:</strong> {{ evaluation.idea.feasibilityPlan.risks }}</p>
+          </section>
+          <section>
+            <h3>Financing plan</h3>
+            <p>
+              <strong>Funding needed:</strong>
+              {{ evaluation.idea.financingPlan.currency }}
+              {{ evaluation.idea.financingPlan.totalFundingNeeded }}
+            </p>
+            <p><strong>Funding sources:</strong> {{ evaluation.idea.financingPlan.fundingSources }}</p>
+            <ul>
+              @for (cost of evaluation.idea.financingPlan.costs; track $index) {
+                <li>
+                  {{ cost.item }} — {{ evaluation.idea.financingPlan.currency }} {{ cost.amount }}
+                  @if (cost.description) {
+                    : {{ cost.description }}
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+          <section>
+            <h3>Milestones</h3>
+            <ol>
+              @for (milestone of evaluation.idea.milestones; track $index) {
+                <li>
+                  <strong>{{ milestone.title }}</strong> ({{ milestone.targetDate }}):
+                  {{ milestone.successMeasure }}
+                </li>
+              }
+            </ol>
+          </section>
+        </div>
+      </section>
+
+      <section class="advisory-card" aria-labelledby="advisory-title">
+        <p class="eyebrow">Advisory only</p>
+        <h2 id="advisory-title">Automated review</h2>
+        @if (evaluation.idea.automatedReview; as report) {
+          <p><strong>Status:</strong> {{ report.status }}</p>
+          @if (report.summary) {
+            <p>{{ report.summary }}</p>
+          }
+          @if (report.informationGaps.length > 0) {
+            <h3>Information gaps</h3>
+            <ul>
+              @for (gap of report.informationGaps; track $index) {
+                <li>{{ gap }}</li>
+              }
+            </ul>
+          }
+          @if (report.limitations.length > 0) {
+            <h3>Limitations</h3>
+            <ul>
+              @for (limitation of report.limitations; track $index) {
+                <li>{{ limitation }}</li>
+              }
+            </ul>
+          } @else {
+            <p>No limitations were recorded for the automated review.</p>
+          }
+          @if (report.failureMessage) {
+            <p><strong>Review note:</strong> {{ report.failureMessage }}</p>
+          }
+        } @else {
+          <p>No automated review is available. Continue with independent human judgment.</p>
+        }
+        <p class="advisory-note">
+          This report is not a score or decision. Evaluate the application independently.
+        </p>
+      </section>
+
+      @if (evaluation.evaluatorType === 'internal' && panelSummary(); as summary) {
+        <section class="panel-card" aria-labelledby="panel-summary-title" aria-live="polite">
+          <h2 id="panel-summary-title">Panel summary</h2>
+          <p>Evaluations submitted: {{ summary.count }}</p>
+          <p>Panel mean: {{ summary.mean === null ? 'Not available' : summary.mean + '/100' }}</p>
+          <p>Score spread: {{ summary.spread }} points</p>
+          @if (summary.needsAdjudication) {
+            <p class="adjudication-flag" role="status">
+              Needs adjudication: evaluator scores differ beyond the review threshold.
+            </p>
+          }
+        </section>
+      }
+
+      <section class="scoring-card" aria-labelledby="scoring-title">
+        <header>
+          <p class="eyebrow">Human evaluation</p>
+          <h2 id="scoring-title">{{ evaluation.criteriaSet.name }}</h2>
+          <p>Score each criterion from 0 to its maximum. The total is weighted by the criteria set.</p>
+        </header>
+
+        <form [formGroup]="form" (ngSubmit)="saveEvaluation()">
+          <div class="criteria-list" formGroupName="scores">
+            @for (criterion of evaluation.criteriaSet.criteria; track criterion.id) {
+              <fieldset class="criterion-card">
+                <legend>{{ criterion.label }}</legend>
+                <p [id]="'criterion-help-' + criterion.id">{{ criterion.description }}</p>
+                <label [for]="'criterion-score-' + criterion.id">
+                  Score (0–{{ criterion.maxScore }}, weight {{ criterion.weight }})
+                </label>
+                <input
+                  [id]="'criterion-score-' + criterion.id"
+                  [formControlName]="criterion.id"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  [max]="criterion.maxScore"
+                  step="any"
+                  [attr.aria-describedby]="'criterion-help-' + criterion.id"
+                />
+                @if (
+                  form.controls.scores.controls[criterion.id]?.touched &&
+                  form.controls.scores.controls[criterion.id]?.invalid
+                ) {
+                  <p class="field-error" role="alert">
+                    Enter a score from 0 to {{ criterion.maxScore }}.
+                  </p>
+                }
+              </fieldset>
+            }
+          </div>
+
+          <p class="total-score" aria-live="polite">
+            Weighted total:
+            <strong>{{ totalScore() === null ? 'Complete all scores to calculate' : totalScore() + '/100' }}</strong>
+          </p>
+
+          <label class="form-field" for="evaluation-comments">
+            Comments
+            <textarea
+              id="evaluation-comments"
+              formControlName="comments"
+              rows="5"
+              maxlength="5000"
+            ></textarea>
+          </label>
+
+          <label class="form-field" for="evaluation-recommendation">
+            Recommendation
+            <select id="evaluation-recommendation" formControlName="recommendation" required>
+              <option [ngValue]="null">Select a recommendation</option>
+              <option value="advance">Advance</option>
+              <option value="revise">Revise</option>
+              <option value="decline">Decline</option>
+            </select>
+          </label>
+          @if (
+            form.controls.recommendation.touched &&
+            form.controls.recommendation.invalid
+          ) {
+            <p class="field-error" role="alert">Choose a recommendation before submitting.</p>
+          }
+
+          @if (saveError()) {
+            <p class="field-error" role="alert">{{ saveError() }}</p>
+          }
+          @if (isSaving()) {
+            <app-idea-loader label="Submitting your evaluation" />
+          }
+          <button
+            class="primary-button"
+            type="submit"
+            [disabled]="isSaving() || form.invalid || totalScore() === null"
+            [attr.aria-busy]="isSaving()"
+          >
+            Submit evaluation
+          </button>
+        </form>
+      </section>
+
+      <section class="questions-card" aria-labelledby="questions-title">
+        <h2 id="questions-title">Applicant questions and responses</h2>
+        @if (questions().length === 0) {
+          <p>No clarification questions have been sent for this assignment.</p>
+        } @else {
+          <ol class="question-list">
+            @for (question of questions(); track question.id) {
+              <li>
+                <p>{{ question.question }}</p>
+                @if (question.response) {
+                  <p><strong>Applicant response:</strong> {{ question.response }}</p>
+                } @else {
+                  <p class="awaiting-response">Awaiting applicant response.</p>
+                }
+              </li>
+            }
+          </ol>
+        }
+
+        <form (ngSubmit)="askQuestion()" class="question-form">
+          <label for="evaluator-question">Ask the applicant for clarification</label>
+          <textarea
+            id="evaluator-question"
+            rows="3"
+            maxlength="2000"
+            required
+            [value]="questionDraft()"
+            (input)="onQuestionInput($event)"
+          ></textarea>
+          @if (questionError()) {
+            <p class="field-error" role="alert">{{ questionError() }}</p>
+          }
+          @if (isPostingQuestion()) {
+            <app-idea-loader label="Sending your question" />
+          }
+          <button
+            class="secondary-button"
+            type="submit"
+            [disabled]="isPostingQuestion() || !questionDraft().trim()"
+            [attr.aria-busy]="isPostingQuestion()"
+          >
+            Send question
+          </button>
+        </form>
+      </section>
+    }
+  </div>
+</main>

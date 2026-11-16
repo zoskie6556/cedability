@@ -2,19 +2,24 @@ import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { Auth } from '@angular/fire/auth';
 import {
   collection,
-  deleteDoc,
   doc,
   Firestore,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
   where,
   writeBatch,
   type DocumentData,
   type Unsubscribe,
 } from '@angular/fire/firestore';
+import { parseEvaluationCriteriaSet } from '../../shared/models/idea-evaluation.model';
+import type {
+  EvaluatorType,
+  EvaluatorIdeaView,
+} from '../../shared/models/idea-evaluation.model';
+import { UserDataService } from './user-data.service';
 import type { IdeaStatus } from '../../shared/workflow/idea-workflow';
 import { requireIdeaStatus } from '../../shared/models/status-parse';
 
@@ -32,9 +37,11 @@ export interface AdminIdeaRow {
 export interface EvaluatorOption {
   id: string;
   name: string;
+  evaluatorType: EvaluatorType;
+  organization: string | null;
 }
 
-export interface IdeaAssignment {
+export interface AdminIdeaAssignment {
   id: string;
   ideaId: string;
   evaluatorUid: string;
@@ -45,9 +52,10 @@ export interface IdeaAssignment {
 export class AdminIdeaService {
   private readonly firestore = inject(Firestore);
   private readonly auth = inject(Auth);
+  private readonly userDataService = inject(UserDataService);
 
   readonly ideas = signal<AdminIdeaRow[]>([]);
-  readonly assignments = signal<IdeaAssignment[]>([]);
+  readonly assignments = signal<AdminIdeaAssignment[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
@@ -110,7 +118,12 @@ export class AdminIdeaService {
     return snap.docs
       .map(document => {
         const data = document.data();
-        return { id: document.id, name: (data['displayName'] ?? data['name'] ?? data['email'] ?? 'Unnamed') as string };
+        return {
+          id: document.id,
+          name: (data['displayName'] ?? data['fullName'] ?? data['email'] ?? 'Unnamed') as string,
+          evaluatorType: data['evaluatorType'] === 'external' ? 'external' : 'internal',
+          organization: typeof data['organization'] === 'string' ? data['organization'] : null,
+        };
       })
       .sort((left, right) => left.name.localeCompare(right.name));
   }
@@ -126,21 +139,98 @@ export class AdminIdeaService {
   }
 
   async assignEvaluator(idea: AdminIdeaRow, evaluator: EvaluatorOption): Promise<void> {
-    // A fixed document ID means the same evaluator can never be assigned twice to the same idea and stage.
-    const assignmentId = `${idea.id}_${idea.stageId ?? 'stage'}_${evaluator.id}`;
-    await setDoc(doc(this.firestore, 'assignments', assignmentId), {
+    if (!idea.stageId) {
+      throw new Error('An idea must have an active evaluation stage before it can be assigned.');
+    }
+
+    const assignedBy = this.auth.currentUser?.uid;
+    if (!assignedBy) {
+      throw new Error('An authenticated administrator is required to assign an evaluator.');
+    }
+
+    const assignmentId = `${idea.id}_${idea.stageId}_${evaluator.id}`;
+    const assignmentRef = doc(this.firestore, 'assignments', assignmentId);
+    if ((await getDoc(assignmentRef)).exists()) {
+      throw new Error('This evaluator already has an assignment for the current stage.');
+    }
+
+    const batch = writeBatch(this.firestore);
+    batch.set(assignmentRef, {
       ideaId: idea.id,
       stageId: idea.stageId,
       evaluatorUid: evaluator.id,
       status: 'pending',
-      assignedBy: this.auth.currentUser?.uid ?? null,
+      assignedBy,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    if (evaluator.evaluatorType === 'external') {
+      const [ideaDocument, stageDocument] = await Promise.all([
+        this.userDataService.getIdeaById(idea.id),
+        getDoc(doc(this.firestore, 'stages', idea.stageId)),
+      ]);
+      if (!ideaDocument || !stageDocument.exists()) {
+        throw new Error('The idea or evaluation stage could not be found.');
+      }
+
+      const stage = stageDocument.data();
+      const stageName = stage['name'];
+      const criteriaSetId = stage['criteriaSetId'];
+      if (typeof stageName !== 'string' || typeof criteriaSetId !== 'string') {
+        throw new Error('The evaluation stage configuration is invalid.');
+      }
+
+      const criteriaSnapshot = await getDoc(doc(this.firestore, 'criteriaSets', criteriaSetId));
+      if (!criteriaSnapshot.exists()) {
+        throw new Error('The stage scoring criteria could not be found.');
+      }
+
+      const evaluatorView: Omit<EvaluatorIdeaView, 'createdAt'> = {
+        ideaId: idea.id,
+        assignmentId,
+        evaluatorUid: evaluator.id,
+        stageId: idea.stageId,
+        stageName,
+        criteriaSetId,
+        criteriaSet: parseEvaluationCriteriaSet(criteriaSetId, criteriaSnapshot.data()),
+        title: ideaDocument.title,
+        category: ideaDocument.category,
+        problem: ideaDocument.problem,
+        proposedSolution: ideaDocument.proposedSolution,
+        intendedBeneficiaries: ideaDocument.intendedBeneficiaries,
+        plannedLocation: ideaDocument.plannedLocation,
+        marketPlan: ideaDocument.marketPlan,
+        feasibilityPlan: ideaDocument.feasibilityPlan,
+        financingPlan: ideaDocument.financingPlan,
+        milestones: ideaDocument.milestones,
+        automatedReview: ideaDocument.automatedReview,
+      };
+      batch.set(
+        doc(this.firestore, 'ideas', idea.id, 'evaluatorViews', assignmentId),
+        { ...evaluatorView, createdAt: serverTimestamp() },
+      );
+    }
+
+    await batch.commit();
   }
 
   async removeAssignment(assignmentId: string): Promise<void> {
-    await deleteDoc(doc(this.firestore, 'assignments', assignmentId));
+    const assignmentRef = doc(this.firestore, 'assignments', assignmentId);
+    const assignment = await getDoc(assignmentRef);
+    if (!assignment.exists()) {
+      throw new Error('The evaluator assignment could not be found.');
+    }
+
+    const ideaId = assignment.data()['ideaId'];
+    if (typeof ideaId !== 'string') {
+      throw new Error('The evaluator assignment has an invalid idea reference.');
+    }
+
+    const batch = writeBatch(this.firestore);
+    batch.delete(assignmentRef);
+    batch.delete(doc(this.firestore, 'ideas', ideaId, 'evaluatorViews', assignmentId));
+    await batch.commit();
   }
 
   /** Changes the status and records the change in the idea's timeline in one atomic write. */

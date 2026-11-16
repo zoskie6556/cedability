@@ -1,0 +1,38 @@
+<main class="worklist-page" id="main-content">
+  <div class="worklist-shell">
+    <header class="page-heading">
+      <p class="eyebrow">Evaluation</p>
+      <h1>Your assigned ideas</h1>
+      <p>Open an assignment to review the plan and submit your independent evaluation.</p>
+    </header>
+
+    @if (isLoading()) {
+      <app-idea-loader label="Loading your assignments" />
+    } @else if (loadError()) {
+      <section class="state-card" role="alert">
+        <p>{{ loadError() }}</p>
+        <button type="button" class="primary-button" (click)="loadAssignments()">Try again</button>
+      </section>
+    } @else if (assignments().length === 0) {
+      <section class="state-card">
+        <h2>No open assignments</h2>
+        <p>Ideas assigned to you will appear here.</p>
+      </section>
+    } @else {
+      <section class="assignment-list" aria-label="Open evaluator assignments">
+        @for (item of assignments(); track item.assignment.id) {
+          <article class="assignment-card">
+            <div>
+              <p class="eyebrow">Category: {{ item.category ?? 'Not classified' }}</p>
+              <h2>{{ item.title }}</h2>
+              <p class="due-date">Due: {{ formatDueDate(item) }}</p>
+            </div>
+            <a class="primary-button" [routerLink]="[item.assignment.id]">
+              Review this idea
+            </a>
+          </article>
+        }
+      </section>
+    }
+  </div>
+</main>

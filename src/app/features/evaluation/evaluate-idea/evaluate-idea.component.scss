@@ -1,0 +1,271 @@
+:host {
+  display: block;
+}
+
+.evaluation-page {
+  min-height: calc(100vh - 200px);
+  padding: clamp(1.5rem, 4vw, 3.5rem) 1.25rem;
+  background:
+    radial-gradient(circle at 90% 8%, #f6e1ca 0, transparent 22rem),
+    var(--paper);
+}
+
+.evaluation-shell {
+  display: grid;
+  width: min(1050px, 100%);
+  gap: 1.25rem;
+  margin: 0 auto;
+}
+
+.back-link {
+  width: fit-content;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: #174a70;
+  font-weight: 700;
+}
+
+.page-heading {
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.page-heading h1 {
+  margin: 0;
+  color: var(--ceda-deep);
+  font-family: var(--display-font);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.page-heading > p:last-child,
+.page-heading > p:nth-last-child(2) {
+  color: var(--muted);
+}
+
+.eyebrow {
+  margin: 0 0 0.55rem;
+  color: var(--ceda-primary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.plan-card,
+.advisory-card,
+.panel-card,
+.scoring-card,
+.questions-card,
+.state-card {
+  padding: clamp(1rem, 3vw, 1.6rem);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 20px 55px #4d211b12;
+}
+
+.plan-card h2,
+.advisory-card h2,
+.panel-card h2,
+.scoring-card h2,
+.questions-card h2,
+.state-card h1 {
+  margin: 0 0 0.8rem;
+  color: var(--ceda-deep);
+  font-family: var(--display-font);
+}
+
+.plan-grid,
+.criteria-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.plan-grid > section,
+.criterion-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #e8ddd5;
+  border-radius: 0.7rem;
+  background: #fffdfb;
+}
+
+.plan-grid h3,
+.advisory-card h3 {
+  margin: 0 0 0.45rem;
+  color: var(--ceda-deep);
+  font-size: 1rem;
+}
+
+.plan-grid p,
+.plan-grid ul,
+.plan-grid ol,
+.advisory-card p,
+.advisory-card ul,
+.panel-card p,
+.questions-card p {
+  color: #493832;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.plan-grid p {
+  margin: 0.35rem 0;
+}
+
+.advisory-card ul,
+.plan-grid ul,
+.plan-grid ol {
+  padding-left: 1.25rem;
+}
+
+.advisory-note,
+.awaiting-response {
+  color: #4a3b33 !important;
+  font-size: 0.84rem !important;
+}
+
+.adjudication-flag {
+  padding: 0.8rem;
+  border: 2px solid #7a3d00;
+  border-radius: 0.55rem;
+  background: #fff3d6;
+  color: #552900 !important;
+  font-weight: 800;
+}
+
+.scoring-card,
+.scoring-card form,
+.questions-card,
+.question-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.scoring-card header > p:last-child {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.criterion-card {
+  margin: 0;
+}
+
+.criterion-card legend {
+  padding: 0 0.25rem;
+  color: var(--ceda-deep);
+  font-weight: 800;
+}
+
+.criterion-card p,
+.total-score {
+  color: #493832;
+  line-height: 1.5;
+}
+
+.criterion-card label,
+.form-field,
+.question-form label {
+  display: grid;
+  gap: 0.45rem;
+  color: #352620;
+  font-weight: 700;
+}
+
+.criterion-card input,
+.form-field textarea,
+.form-field select,
+.question-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #66554d;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #221915;
+  font: inherit;
+}
+
+.criterion-card input:focus-visible,
+.form-field textarea:focus-visible,
+.form-field select:focus-visible,
+.question-form textarea:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.back-link:focus-visible {
+  outline: 3px solid #174a70;
+  outline-offset: 3px;
+}
+
+.field-error {
+  margin: 0;
+  color: #8a1c2d;
+  font-weight: 700;
+}
+
+.total-score {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: var(--ceda-primary);
+  color: #fff;
+}
+
+.secondary-button {
+  background: #e8f0f7;
+  color: #173a56;
+  text-decoration: none;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.question-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding-left: 1.35rem;
+}
+
+.question-list li {
+  padding-left: 0.25rem;
+}
+
+.state-card {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .plan-grid,
+  .criteria-list {
+    grid-template-columns: 1fr;
+  }
+}
