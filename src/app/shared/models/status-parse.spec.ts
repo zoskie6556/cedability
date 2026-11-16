@@ -8,8 +8,13 @@ describe('requireIdeaStatus', () => {
     expect(requireIdeaStatus('awarded')).toBe('awarded');
   });
   it('maps the old stage names so existing data still loads', () => {
+    expect(requireIdeaStatus('draft')).toBe('submitted');
     expect(requireIdeaStatus('under-review')).toBe('human_review');
+    expect(requireIdeaStatus('under_review')).toBe('human_review');
     expect(requireIdeaStatus('needs-revision')).toBe('needs_amendment');
+    expect(requireIdeaStatus('needs_revision')).toBe('needs_amendment');
+    expect(requireIdeaStatus('feedback_requested')).toBe('needs_amendment');
+    expect(requireIdeaStatus('revised')).toBe('ai_screening');
     expect(requireIdeaStatus('accepted')).toBe('approved');
     expect(requireIdeaStatus('declined')).toBe('rejected');
   });

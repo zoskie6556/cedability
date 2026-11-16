@@ -62,17 +62,16 @@
   font-weight: 600;
 }
 
-.idea-status-under-review {
-  border-color: var(--admin-warning);
-}
-
-.idea-status-approved,
-.idea-status-awarded {
+.idea-status-green {
   border-color: var(--admin-success);
 }
 
-.idea-status-rejected {
-  border-style: dashed;
+.idea-status-yellow {
+  border-color: var(--admin-warning);
+}
+
+.idea-status-red {
+  border-color: var(--admin-danger);
 }
 
 .assigned {

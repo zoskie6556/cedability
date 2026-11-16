@@ -15,27 +15,8 @@ import {
   type DocumentData,
   type Unsubscribe,
 } from '@angular/fire/firestore';
-
-export type IdeaStatus =
-  | 'draft'
-  | 'submitted'
-  | 'under_review'
-  | 'feedback_requested'
-  | 'revised'
-  | 'approved'
-  | 'rejected'
-  | 'awarded';
-
-export const IDEA_STATUSES: ReadonlyArray<{ value: IdeaStatus; label: string }> = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'under_review', label: 'Under review' },
-  { value: 'feedback_requested', label: 'Feedback requested' },
-  { value: 'revised', label: 'Revised' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'awarded', label: 'Awarded' },
-];
+import type { IdeaStatus } from '../../shared/workflow/idea-workflow';
+import { requireIdeaStatus } from '../../shared/models/status-parse';
 
 export interface AdminIdeaRow {
   id: string;
@@ -194,8 +175,8 @@ export class AdminIdeaService {
   }
 
   private normalizeStatus(value: unknown): IdeaStatus {
-    const text = String(value ?? '').toLowerCase().trim().replace(/\s+/g, '_');
-    return IDEA_STATUSES.some(option => option.value === text) ? (text as IdeaStatus) : 'draft';
+    const text = typeof value === 'string' ? value.toLowerCase().trim().replace(/\s+/g, '_') : value;
+    return requireIdeaStatus(text);
   }
 
   private toDate(value: unknown): Date | null {

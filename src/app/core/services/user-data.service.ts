@@ -16,19 +16,19 @@ import {
 } from '@angular/fire/firestore';
 import { Timestamp } from 'firebase/firestore';
 import type { IdeaQuestion } from '../../shared/models/idea-evaluation.model';
-import type {
-  AutomatedReviewFinding,
-  AutomatedReviewReport,
-  AutomatedReviewStatus,
-  Idea,
-  IdeaFeasibilityPlan,
-  IdeaFinancingPlan,
-  IdeaMarketPlan,
-  IdeaMilestone,
-  NewIdea,
-  ReviewFindingStatus,
+import { requireIdeaStatus } from '../../shared/models/status-parse';
+import {
+  type AutomatedReviewFinding,
+  type AutomatedReviewReport,
+  type AutomatedReviewStatus,
+  type Idea,
+  type IdeaFeasibilityPlan,
+  type IdeaFinancingPlan,
+  type IdeaMarketPlan,
+  type IdeaMilestone,
+  type NewIdea,
+  type ReviewFindingStatus,
 } from '../../shared/models/idea.model';
-import type { IdeaStatus } from '../../shared/models/idea.model';
 import type { Profile, UserType } from '../../shared/models/profile.model';
 import type { User } from '../../shared/models/user.model';
 
@@ -514,18 +514,4 @@ function requireReviewFindingStatus(value: unknown): ReviewFindingStatus {
   }
 
   throw new Error('The Firestore review finding status is invalid.');
-}
-
-function requireIdeaStatus(value: unknown): IdeaStatus {
-  if (
-    value === 'submitted' ||
-    value === 'under-review' ||
-    value === 'needs-revision' ||
-    value === 'accepted' ||
-    value === 'declined'
-  ) {
-    return value;
-  }
-
-  throw new Error('The Firestore idea status value is invalid.');
 }

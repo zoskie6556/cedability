@@ -4,6 +4,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
 import type { IdeaQuestion } from '../../../shared/models/idea-evaluation.model';
 import type { AutomatedReviewCriterion, Idea } from '../../../shared/models/idea.model';
+import { STAGES } from '../../../shared/workflow/idea-workflow';
 
 @Component({
   selector: 'app-review',
@@ -18,6 +19,7 @@ export class ReviewComponent implements OnInit {
   private readonly userDataService = inject(UserDataService);
 
   protected readonly ideas = signal<Idea[]>([]);
+  protected readonly stages = STAGES;
   protected readonly questions = signal<Record<string, IdeaQuestion[] | undefined>>({});
   protected readonly questionDrafts = signal<Partial<Record<string, string>>>({});
   protected readonly isLoading = signal(true);

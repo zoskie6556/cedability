@@ -53,3 +53,22 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Design services around a single responsibility
 - Use the `providedIn: 'root'` option for singleton services
 - Use the `inject()` function instead of constructor injection
+
+// This section was added by Oageletswe.
+## Stack
+Angular 21 standalone components, signals, OnPush, `inject()`, typed reactive forms, Firebase (Auth, Firestore, Storage, Functions), Vitest.
+
+## Hard rules
+1. Data lives ONLY where `DATA_MODEL.md` says. Never invent a collection; ask first. Update that file in the same change.
+2. Idea stages come ONLY from `shared/workflow/idea-workflow.ts` (`STAGES`, `canTransition`). Never hard-code status strings, colours or percentages.
+3. Status changes go through a Cloud Function that also writes `statusHistory`, a notification and an `auditLogs` entry. Components never set `status`.
+4. AI is advisory. It can flag, summarise and ask questions. It never rejects, scores for ranking, or decides.
+5. Everything stored or shown to evaluators is in English. Input language is a user choice.
+6. Roles: `submitter | evaluator | adjudicator | admin | agent`. Internal vs external evaluator = a field on the user (`evaluatorType`), not a new role.
+7. Submitters can never read `evaluations`.
+8. Accessibility (WCAG 2.2 AA): labels, `aria-live` for status changes, focus management, keyboard only, never colour alone (always icon + text), 44px targets, `prefers-reduced-motion`.
+9. Pure logic goes in plain `.ts` files (no Angular) with a `.spec.ts`. Components stay thin.
+10. Personal data: only what is needed (Data Protection Act 2024). Do not send names, emails or IDs to the AI.
+
+## Style
+Small files, one job each. Comment WHY, not what. Typed errors, no `any`. Run `npx ng build && npx ng test` before saying done. Do not commit or push.

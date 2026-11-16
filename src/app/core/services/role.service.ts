@@ -25,7 +25,7 @@ export class RoleService {
       return { status: 'unassigned' };
     }
 
-    const role = roleRecord.role;
+    const role = roleRecord.role === 'user' ? 'submitter' : roleRecord.role;
     return isUserRole(role) ? { status: 'assigned', role } : { status: 'invalid' };
   }
 }

@@ -41,7 +41,6 @@ export const routes: Routes = [
   },
   {
     path: 'submissions',
-    canActivate: [roleGuard('user')],
     loadChildren: () => import('./features/submissions/submissions.routes').then(m => m.SUBMISSIONS_ROUTES),
   },
   {

@@ -11,6 +11,8 @@ import {
   type QuerySnapshot,
   type Unsubscribe,
 } from '@angular/fire/firestore';
+import { requireIdeaStatus } from '../../shared/models/status-parse';
+import { IDEA_STATUSES, STAGES, type HealthColour, type IdeaStatus } from '../../shared/workflow/idea-workflow';
 
 export type AdminDeltaStatus = 'up' | 'down';
 
@@ -91,7 +93,7 @@ export class AdminDashboardService {
     usersByRole: { admin: 0, evaluator: 0, adjudicator: 0, agent: 0, submitter: 0 },
     activeUsers: 0,
     totalIdeas: 0,
-    ideasByStatus: { draft: 0, submitted: 0, under_review: 0, approved: 0, rejected: 0, awarded: 0 },
+    ideasByStatus: Object.fromEntries(IDEA_STATUSES.map(status => [status, 0])),
     ideasByCategory: {},
     ideasPerDay: {},
     openTickets: 0,
@@ -257,8 +259,8 @@ export class AdminDashboardService {
         route: '/admin/ideas',
       },
       {
-        label: 'Ideas under review',
-        value: this.formatNumber(summary.ideasByStatus['under_review'] ?? 0),
+        label: `${STAGES.human_review.label} ideas`,
+        value: this.formatNumber(summary.ideasByStatus['human_review'] ?? 0),
         delta: '+0%',
         status: 'up',
         route: '/admin/ideas',
@@ -312,22 +314,17 @@ export class AdminDashboardService {
     return this.roleItems(summary);
   }
 
-  buildStatusBreakdown(summary: AdminOverviewSummary): Array<{ label: string; value: number; percent: number }> {
-    const ordered = [
-      ['under_review', 'Under review'],
-      ['approved', 'Approved'],
-      ['awarded', 'Awarded'],
-      ['submitted', 'Submitted'],
-      ['rejected', 'Rejected'],
-      ['draft', 'Draft'],
-    ] as const;
-
+  buildStatusBreakdown(
+    summary: AdminOverviewSummary,
+  ): Array<{ status: IdeaStatus; label: string; value: number; percent: number; health: HealthColour }> {
     const total = Math.max(summary.totalIdeas, 1);
 
-    return ordered.map(([key, label]) => ({
-      label,
-      value: Number(summary.ideasByStatus[key] ?? 0),
-      percent: Math.round(((summary.ideasByStatus[key] ?? 0) / total) * 100),
+    return IDEA_STATUSES.map(status => ({
+      status,
+      label: STAGES[status].label,
+      value: Number(summary.ideasByStatus[status] ?? 0),
+      percent: Math.round(((summary.ideasByStatus[status] ?? 0) / total) * 100),
+      health: STAGES[status].health,
     }));
   }
 
@@ -390,7 +387,13 @@ export class AdminDashboardService {
     snap.docs.forEach(document => {
       const data = document.data();
 
-      const status = (data['status'] as string | undefined) ?? 'draft';
+      let status: IdeaStatus;
+      try {
+        status = requireIdeaStatus(data['status']);
+      } catch (error) {
+        console.error(`[AdminDashboardService] idea ${document.id} has an invalid status`, error);
+        return;
+      }
       byStatus[status] = (byStatus[status] ?? 0) + 1;
 
       const category = data['category'] as string | undefined;
@@ -481,7 +484,7 @@ export class AdminDashboardService {
       usersByRole: this.toRecordMap(source['usersByRole'], fallback.usersByRole),
       activeUsers: this.toNumber(source['activeUsers'], fallback.activeUsers),
       totalIdeas: this.toNumber(source['totalIdeas'], fallback.totalIdeas),
-      ideasByStatus: this.toRecordMap(source['ideasByStatus'], fallback.ideasByStatus),
+      ideasByStatus: this.normalizeIdeaStatusCounts(source['ideasByStatus']),
       ideasByCategory: this.toRecordMap(source['ideasByCategory'], fallback.ideasByCategory),
       ideasPerDay: this.toRecordMap(source['ideasPerDay'], fallback.ideasPerDay),
       openTickets: this.toNumber(source['openTickets'], fallback.openTickets),
@@ -551,6 +554,24 @@ export class AdminDashboardService {
     for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
       result[key] = this.toNumber(entryValue, 0);
     }
+    return result;
+  }
+
+  private normalizeIdeaStatusCounts(value: unknown): Record<IdeaStatus, number> {
+    const result = { ...this.fallbackOverview.ideasByStatus } as Record<IdeaStatus, number>;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return result;
+    }
+
+    for (const [legacyStatus, count] of Object.entries(value as Record<string, unknown>)) {
+      try {
+        const status = requireIdeaStatus(legacyStatus);
+        result[status] += this.toNumber(count, 0);
+      } catch (error) {
+        console.error(`[AdminDashboardService] overview has an invalid idea status "${legacyStatus}"`, error);
+      }
+    }
+
     return result;
   }
 

@@ -169,6 +169,18 @@ h3 {
   background: linear-gradient(90deg, var(--admin-primary), #7ea4ff);
 }
 
+.bar .bar-fill-green {
+  background: var(--admin-success);
+}
+
+.bar .bar-fill-yellow {
+  background: var(--admin-warning);
+}
+
+.bar .bar-fill-red {
+  background: var(--admin-danger);
+}
+
 .line-chart {
   height: 200px;
   margin-top: 1rem;

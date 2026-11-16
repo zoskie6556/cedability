@@ -56,7 +56,7 @@ export const ACCOUNT_ROUTES: Routes = [
       {
         path: 'dashboard',
         title: 'User Dashboard',
-        canActivate: [roleGuard('user')],
+        canActivate: [roleGuard('submitter')],
         loadComponent: () =>
           import('./user-dashboard/user-dashboard.component').then(
             (m) => m.UserDashboardComponent,

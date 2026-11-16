@@ -27,7 +27,7 @@ describe('roleGuard', () => {
     router = TestBed.inject(Router);
   });
 
-  it.each(['user', 'evaluator', 'admin'] as const)(
+  it.each(['user', 'submitter', 'evaluator', 'admin'] as const)(
     'allows the matching %s role',
     async (role: UserRole) => {
       roleService.loadCurrentRole.mockResolvedValue({ status: 'assigned', role });
@@ -42,6 +42,8 @@ describe('roleGuard', () => {
 
   it.each([
     ['user', 'admin'],
+    ['submitter', 'admin'],
+    ['admin', 'submitter'],
     ['evaluator', 'admin'],
     ['admin', 'evaluator'],
   ] as const)(

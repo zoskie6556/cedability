@@ -1,14 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
-import {
-  AdminIdeaRow,
-  AdminIdeaService,
-  EvaluatorOption,
-  IDEA_STATUSES,
-  IdeaAssignment,
-  IdeaStatus,
-} from '../../../core/services/admin-idea.service';
+import { AdminIdeaRow, AdminIdeaService, EvaluatorOption, IdeaAssignment } from '../../../core/services/admin-idea.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { IDEA_STATUSES, STAGES, type IdeaStatus } from '../../../shared/workflow/idea-workflow';
 
 @Component({
   selector: 'app-admin-ideas',
@@ -22,7 +16,8 @@ export class IdeasComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly statusOptions = IDEA_STATUSES;
+  readonly stages = STAGES;
+  readonly statusOptions = IDEA_STATUSES.map(value => ({ value, label: STAGES[value].label }));
 
   readonly loading = this.service.loading;
   readonly error = this.service.error;
@@ -38,7 +33,7 @@ export class IdeasComponent implements OnInit {
     return {
       total: all.length,
       submitted: count('submitted'),
-      underReview: count('under_review'),
+      humanReview: count('human_review'),
       approved: count('approved'),
       awarded: count('awarded'),
     };
@@ -148,11 +143,11 @@ export class IdeasComponent implements OnInit {
   }
 
   statusLabel(status: IdeaStatus): string {
-    return this.statusOptions.find(option => option.value === status)?.label ?? status;
+    return STAGES[status].label;
   }
 
   statusClass(status: IdeaStatus): string {
-    return `idea-status-${status.replace('_', '-')}`;
+    return `idea-status-${STAGES[status].health}`;
   }
 
   formatScore(score: number | null): string {

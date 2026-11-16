@@ -34,7 +34,10 @@
                 <p class="eyebrow">{{ idea.ownerName }} · {{ idea.plannedLocation }}</p>
                 <h2>{{ idea.title }}</h2>
               </div>
-              <span class="status-chip">{{ idea.status }}</span>
+              <span
+                [class]="'status-chip idea-status-' + stages[idea.status].health"
+                [title]="stages[idea.status].help"
+              >{{ stages[idea.status].label }}</span>
             </header>
 
             <div class="idea-overview">

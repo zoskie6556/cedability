@@ -4,6 +4,7 @@ import { FirebaseApp } from '@angular/fire/app';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { getStorage, provideStorage } from '@angular/fire/storage';
 import { AuthService } from '../../core/services/auth.service';
+import { roleGuard } from '../../core/guards/role.guard';
 import { UserDataService } from '../../core/services/user-data.service';
 
 export const SUBMISSIONS_ROUTES: Routes = [
@@ -11,6 +12,7 @@ export const SUBMISSIONS_ROUTES: Routes = [
   {
     path: 'idea',
     title: 'Submit an idea',
+    canActivate: [roleGuard('submitter')],
     providers: [
       provideFirestore(() => getFirestore(inject(FirebaseApp))),
       provideStorage(() => getStorage(inject(FirebaseApp))),

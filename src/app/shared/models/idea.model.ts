@@ -1,6 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
+import type { IdeaStatus } from '../workflow/idea-workflow';
 
-export type IdeaStatus = 'submitted' | 'under-review' | 'needs-revision' | 'accepted' | 'declined';
+export type { IdeaStatus } from '../workflow/idea-workflow';
 export type ReviewFindingStatus = 'supported' | 'unclear' | 'risk' | 'not-enough-information';
 export type AutomatedReviewStatus = 'queued' | 'running' | 'complete' | 'failed';
 export type AutomatedReviewCriterion =

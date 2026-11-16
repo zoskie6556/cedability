@@ -128,12 +128,23 @@ Dashboards read these small documents. Never scan the whole `ideas` collection t
 
 ## 4. Idea status values
 
+The canonical idea statuses, in sync with `IDEA_STATUSES` in `src/app/shared/workflow/idea-workflow.ts`, are:
+
+```text
+submitted
+ai_screening
+needs_amendment
+ceda_criteria
+human_review
+adjudication
+approved
+awarded
+rejected
 ```
-draft -> submitted -> under_review -> feedback_requested -> revised -> under_review
-                                   -> approved -> awarded
-                                   -> rejected
-```
-`draft | submitted | under_review | feedback_requested | revised | approved | rejected | awarded`
+
+Labels, help text, health colours, and valid transitions are defined in `idea-workflow.ts`; do not introduce additional canonical status values here.
+
+Legacy idea statuses are normalized when read: `draft` -> `submitted`, `under-review` / `under_review` -> `human_review`, `needs-revision` / `needs_revision` / `feedback_requested` -> `needs_amendment`, `revised` -> `ai_screening`, `accepted` -> `approved`, and `declined` -> `rejected`. Drafts in the submission form are saved locally and are not new Firestore ideas; a newly created idea starts as `submitted`.
 
 Status changes go through a Cloud Function (or a rules-restricted write), which also writes `statusHistory`, a notification and an audit log entry. **Do not set `status` freely from components.**
 
@@ -142,7 +153,7 @@ Status changes go through a Cloud Function (or a rules-restricted write), which 
 | Collection | Owner feature | Client can write | Client can read |
 |---|---|---|---|
 | users | account | own profile fields (not `role`) | own doc; admin all |
-| ideas (+ versions, feedback) | submissions | owner: create/edit while draft or feedback_requested | owner, evaluators, adjudicators, admin |
+| ideas (+ versions, feedback) | submissions | owner: create/edit while needs_amendment | owner, evaluators, adjudicators, admin |
 | evaluations, adjudications | evaluation | evaluator / adjudicator | evaluators, adjudicators, admin (not submitter) |
 | statusHistory | tracking | no (Functions) | owner, staff |
 | assignments, stages, criteriaSets | evaluation / admin | admin | assigned evaluator, admin |

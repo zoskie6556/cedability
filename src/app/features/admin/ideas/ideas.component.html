@@ -10,7 +10,7 @@
   <div class="idea-counts" aria-label="Idea summary">
     <span class="count-chip"><strong>{{ counts().total }}</strong> Total</span>
     <span class="count-chip"><strong>{{ counts().submitted }}</strong> Submitted</span>
-    <span class="count-chip"><strong>{{ counts().underReview }}</strong> Under review</span>
+    <span class="count-chip"><strong>{{ counts().humanReview }}</strong> {{ stages.human_review.label }}</span>
     <span class="count-chip"><strong>{{ counts().approved }}</strong> Approved</span>
     <span class="count-chip"><strong>{{ counts().awarded }}</strong> Awarded</span>
   </div>

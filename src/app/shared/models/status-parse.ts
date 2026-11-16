@@ -5,8 +5,13 @@ import { type IdeaStatus, isIdeaStatus } from '../workflow/idea-workflow';
  * A Map (not a plain object) so inherited keys like "constructor" can never match.
  */
 const LEGACY_STATUS: ReadonlyMap<string, IdeaStatus> = new Map<string, IdeaStatus>([
+  ['draft', 'submitted'],
   ['under-review', 'human_review'],
+  ['under_review', 'human_review'],
   ['needs-revision', 'needs_amendment'],
+  ['needs_revision', 'needs_amendment'],
+  ['feedback_requested', 'needs_amendment'],
+  ['revised', 'ai_screening'],
   ['accepted', 'approved'],
   ['declined', 'rejected'],
 ]);
