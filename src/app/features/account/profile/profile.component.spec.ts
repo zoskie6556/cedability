@@ -211,8 +211,13 @@ describe('ProfileComponent', () => {
 
   it('shows only one question card and swaps it only after its exit animation', async () => {
     const fixture = await createLoadedFixture();
+    const progress = fixture.nativeElement.querySelector(
+      '.onboarding-progress',
+    ) as HTMLDivElement;
 
     expect(fixture.nativeElement.querySelectorAll('.onboarding-step-card')).toHaveLength(1);
+    expect(progress.getAttribute('role')).toBe('progressbar');
+    expect(progress.getAttribute('aria-valuetext')).toBe('Step 1 of 6');
     submitCurrentStep(fixture);
     expect(fixture.nativeElement.querySelector('h2').textContent).toContain(
       'How are you joining?',
@@ -221,6 +226,8 @@ describe('ProfileComponent', () => {
     finishCardAnimation(fixture, 'onboarding-card-exit');
     expect(fixture.nativeElement.querySelectorAll('.onboarding-step-card')).toHaveLength(1);
     expect(fixture.nativeElement.querySelector('h2').textContent).toContain('What do you do?');
+    expect(progress.getAttribute('aria-valuenow')).toBe('2');
+    expect(progress.getAttribute('aria-valuetext')).toBe('Step 2 of 6');
     finishCardAnimation(fixture, 'onboarding-card-enter');
   });
 

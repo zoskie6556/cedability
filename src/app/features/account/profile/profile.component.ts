@@ -24,7 +24,7 @@ import type { User } from '../../../shared/models/user.model';
   selector: 'app-profile',
   imports: [DatePipe, ReactiveFormsModule, RouterLink],
   templateUrl: './profile.component.html',
-  styleUrl: './profile.component.scss',
+  styleUrls: ['./profile.component.scss', './profile-onboarding.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileComponent implements OnInit {

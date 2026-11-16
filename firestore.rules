@@ -8,6 +8,10 @@
 // ideas/{ideaId}/questions/{questionId}: evaluator question and owner response.
 // stats/{docId}: server-written aggregates. auditLogs/{logId}: server-written
 // audit events. Admin SDK writes bypass these client rules.
+// collaborationProfiles/{uid}: opt-in directory projection containing only
+// the user's display name and profession with normalized search keys.
+// collaborationPairs/{uidA~uidB}: one canonical relationship record for a
+// pair, with participant UIDs, request state and timestamps only.
 // ===============================================================
 rules_version = '2';
 
@@ -334,6 +338,160 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    function isValidCollaborationUid(uid) {
+      return uid is string
+        && uid.size() > 0
+        && uid.size() <= 128
+        && uid.matches('^[A-Za-z0-9_-]+$');
+    }
+
+    function isCollaborationUser(uid) {
+      return isValidCollaborationUid(uid)
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && get(/databases/$(database)/documents/users/$(uid)).data.role in ['user', 'submitter'];
+    }
+
+    function hasDiscoverableProfile(uid) {
+      return exists(/databases/$(database)/documents/collaborationProfiles/$(uid))
+        && get(/databases/$(database)/documents/collaborationProfiles/$(uid)).data.uid == uid
+        && get(/databases/$(database)/documents/collaborationProfiles/$(uid)).data.discoverable == true;
+    }
+
+    function isValidCollaborationProfileData(data, uid) {
+      return isCollaborationUser(uid)
+        && data.keys().hasAll([
+          'uid',
+          'displayName',
+          'profession',
+          'displayNameSearch',
+          'professionSearch',
+          'discoverable',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'profession',
+          'displayNameSearch',
+          'professionSearch',
+          'discoverable',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid == uid
+        && data.displayName is string
+        && data.displayName.size() > 0
+        && data.displayName.size() <= 120
+        && data.profession is string
+        && data.profession.size() > 0
+        && data.profession.size() <= 200
+        && data.displayNameSearch is string
+        && data.displayNameSearch.size() > 0
+        && data.displayNameSearch.size() <= 120
+        && data.displayNameSearch == data.displayName.trim().lower()
+        && data.professionSearch is string
+        && data.professionSearch.size() > 0
+        && data.professionSearch.size() <= 200
+        && data.professionSearch == data.profession.trim().lower()
+        && data.displayName == get(/databases/$(database)/documents/users/$(uid)).data.fullName
+        && data.profession == get(/databases/$(database)/documents/users/$(uid)).data.profile.profession
+        && data.discoverable == true
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCollaborationPair(data, pairId) {
+      return data.keys().hasAll([
+          'participants',
+          'senderUid',
+          'recipientUid',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'respondedAt'
+        ])
+        && data.keys().hasOnly([
+          'participants',
+          'senderUid',
+          'recipientUid',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'respondedAt'
+        ])
+        && data.participants is list
+        && data.participants.size() == 2
+        && isValidCollaborationUid(data.participants[0])
+        && isValidCollaborationUid(data.participants[1])
+        && data.participants[0] < data.participants[1]
+        && pairId == data.participants[0] + '~' + data.participants[1]
+        && data.senderUid is string
+        && data.recipientUid is string
+        && data.senderUid != data.recipientUid
+        && data.senderUid in data.participants
+        && data.recipientUid in data.participants
+        && data.status in ['pending', 'accepted', 'declined', 'cancelled']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (data.respondedAt == null || data.respondedAt is timestamp);
+    }
+
+    function hasSameCollaborationParticipants() {
+      return request.resource.data.participants == resource.data.participants
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.senderUid == resource.data.senderUid
+        && request.resource.data.recipientUid == resource.data.recipientUid;
+    }
+
+    function isValidCollaborationResponse(pairId) {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return isValidCollaborationPair(request.resource.data, pairId)
+        && hasSameCollaborationParticipants()
+        && resource.data.status == 'pending'
+        && request.auth.uid == resource.data.recipientUid
+        && request.resource.data.status in ['accepted', 'declined']
+        && changedKeys.hasOnly(['status', 'updatedAt', 'respondedAt'])
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.respondedAt == request.time;
+    }
+
+    function isValidCollaborationCancellation(pairId) {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return isValidCollaborationPair(request.resource.data, pairId)
+        && hasSameCollaborationParticipants()
+        && resource.data.status == 'pending'
+        && request.auth.uid == resource.data.senderUid
+        && request.resource.data.status == 'cancelled'
+        && changedKeys.hasOnly(['status', 'updatedAt', 'respondedAt'])
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.respondedAt == request.time;
+    }
+
+    function isValidCollaborationResend(pairId) {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return isValidCollaborationPair(request.resource.data, pairId)
+        && request.resource.data.participants == resource.data.participants
+        && resource.data.status in ['declined', 'cancelled']
+        && request.auth.uid == request.resource.data.senderUid
+        && request.resource.data.status == 'pending'
+        && changedKeys.hasOnly([
+          'senderUid',
+          'recipientUid',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'respondedAt'
+        ])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.respondedAt == null
+        && isCollaborationUser(request.resource.data.senderUid)
+        && isCollaborationUser(request.resource.data.recipientUid)
+        && hasDiscoverableProfile(request.resource.data.senderUid)
+        && hasDiscoverableProfile(request.resource.data.recipientUid);
+    }
+
     match /users/{userId} {
       allow get: if signedInAs(userId) || isAdmin();
       allow list: if isAdmin();
@@ -361,6 +519,49 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /collaborationProfiles/{userId} {
+      allow get: if signedInAs(userId)
+        || (isUser() && resource.data.discoverable == true);
+      allow list: if isUser() && resource.data.discoverable == true;
+      allow create: if signedInAs(userId)
+        && isValidCollaborationProfileData(request.resource.data, userId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if signedInAs(userId)
+        && isValidCollaborationProfileData(request.resource.data, userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'profession',
+          'displayNameSearch',
+          'professionSearch',
+          'updatedAt'
+        ])
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedInAs(userId)
+        && resource.data.uid == userId
+        && resource.data.discoverable == true;
+    }
+
+    match /collaborationPairs/{pairId} {
+      allow get, list: if isUser() && request.auth.uid in resource.data.participants;
+      allow create: if isUser()
+        && isValidCollaborationPair(request.resource.data, pairId)
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.respondedAt == null
+        && isCollaborationUser(request.resource.data.recipientUid)
+        && hasDiscoverableProfile(request.resource.data.senderUid)
+        && hasDiscoverableProfile(request.resource.data.recipientUid);
+      allow update: if isUser()
+        && (isValidCollaborationResponse(pairId)
+          || isValidCollaborationCancellation(pairId)
+          || isValidCollaborationResend(pairId));
       allow delete: if false;
     }
 

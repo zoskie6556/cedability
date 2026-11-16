@@ -85,14 +85,30 @@
                     </svg>
                   </span>
                   <span class="spark-copy">
-                    <strong>Every idea starts somewhere</strong>
-                    <small>It starts with you.</small>
+                    <strong>Big ideas, made possible</strong>
+                    <small>Start with what you can do.</small>
                   </span>
                   <span class="spark-arrow" aria-hidden="true">↗</span>
                 </div>
-                <div class="idea-node node-one"><span>01</span><strong>Imagine</strong></div>
-                <div class="idea-node node-two"><span>02</span><strong>Include</strong></div>
-                <div class="idea-node node-three"><span>03</span><strong>Grow</strong></div>
+                <div class="idea-node node-one">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M9 18h6m-5 3h4m-5.8-6.5a6 6 0 1 1 7.6 0c-.7.6-1.1 1.4-1.2 2.2h-5.2c-.1-.8-.5-1.6-1.2-2.2Z" />
+                  </svg>
+                  <span>01</span><strong>Imagine</strong>
+                </div>
+                <div class="idea-node node-two">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="5" r="2" />
+                    <path d="M5 9h14m-7 0v5m-4 7 4-7 4 7" />
+                  </svg>
+                  <span>02</span><strong>Include</strong>
+                </div>
+                <div class="idea-node node-three">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4 19h16M6 16l4-4 3 2 5-7m0 0h-4m4 0v4" />
+                  </svg>
+                  <span>03</span><strong>Grow</strong>
+                </div>
                 <div class="art-center">
                   <div class="center-ring"></div>
                   <svg viewBox="0 0 120 120" fill="none">
@@ -124,11 +140,20 @@
                 </div>
                 <span aria-live="polite">{{ onboardingStepLabels[activeOnboardingStep()] }}</span>
               </div>
-              <progress
-                [value]="activeOnboardingStep() + 1"
-                [max]="onboardingStepLabels.length"
+              <div
+                class="onboarding-progress"
+                role="progressbar"
                 aria-label="Onboarding progress"
-              ></progress>
+                [attr.aria-valuemin]="1"
+                [attr.aria-valuenow]="activeOnboardingStep() + 1"
+                [attr.aria-valuemax]="onboardingStepLabels.length"
+                [attr.aria-valuetext]="'Step ' + (activeOnboardingStep() + 1) + ' of ' + onboardingStepLabels.length"
+              >
+                <span
+                  class="onboarding-progress-fill"
+                  [style.width.%]="((activeOnboardingStep() + 1) / onboardingStepLabels.length) * 100"
+                ></span>
+              </div>
 
               @switch (activeOnboardingStep()) {
                 @case (0) {

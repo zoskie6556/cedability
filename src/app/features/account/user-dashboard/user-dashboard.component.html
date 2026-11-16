@@ -5,7 +5,11 @@
     <section class="dashboard-state" role="alert">
       <h1>Dashboard unavailable</h1>
       <p>{{ loadError() }}</p>
-      <button class="dashboard-button dashboard-button-primary" type="button" (click)="loadDashboard()">
+      <button
+        class="dashboard-button dashboard-button-primary"
+        type="button"
+        (click)="loadDashboard()"
+      >
         Try again
       </button>
     </section>
@@ -26,6 +30,216 @@
         </a>
         <a class="dashboard-text-link" routerLink="/tracking/status">Track your submissions</a>
       </div>
+    </section>
+
+    <section class="collaboration-panel" aria-labelledby="collaboration-title">
+      <div class="collaboration-heading">
+        <p class="dashboard-eyebrow">GROW TOGETHER</p>
+        <h2 id="collaboration-title">Find your next collaborator</h2>
+        <p>
+          Discover CEDABILITY members, build connections, and find people who can help move an idea
+          forward.
+        </p>
+      </div>
+
+      @if (collaborationError()) {
+        <p class="collaboration-error" role="alert">{{ collaborationError() }}</p>
+      }
+
+      @if (isCollaborationLoading()) {
+        <div class="collaboration-loading" aria-live="polite">
+          <app-idea-loader label="Loading collaboration tools" />
+        </div>
+      } @else {
+        <div class="directory-consent">
+          <div>
+            <h3>Choose whether members can find you</h3>
+            <p id="directory-privacy">
+              When enabled, only your name and profession appear in the member directory. Your
+              email, phone, address, goals, plans, and other profile details stay private. You can
+              turn this off at any time.
+            </p>
+          </div>
+          <label class="visibility-control" for="collaboration-discoverable">
+            <input
+              id="collaboration-discoverable"
+              type="checkbox"
+              [checked]="isDiscoverable()"
+              [disabled]="isCollaborationBusy()"
+              aria-describedby="directory-privacy"
+              (change)="setDirectoryVisibility($event)"
+            />
+            <span>Show my name and profession</span>
+          </label>
+        </div>
+
+        <form class="directory-search" (submit)="searchDirectory($event)">
+          <label for="collaboration-search">Search members by name or profession</label>
+          <div class="search-controls">
+            <input
+              id="collaboration-search"
+              type="search"
+              autocomplete="off"
+              maxlength="80"
+              placeholder="For example, designer or Ada"
+              [value]="searchTerm()"
+              [disabled]="isSearching()"
+              (input)="setSearchTerm($event)"
+            />
+            <button
+              class="dashboard-button dashboard-button-primary"
+              type="submit"
+              [disabled]="isSearching()"
+            >
+              Search
+            </button>
+          </div>
+        </form>
+
+        @if (isSearching()) {
+          <div class="collaboration-loading" aria-live="polite">
+            <app-idea-loader label="Searching the member directory" />
+          </div>
+        } @else if (hasSearched()) {
+          <div class="member-results" aria-live="polite" aria-busy="false">
+            <h3>Directory results</h3>
+            @if (searchResults().length === 0) {
+              <p class="collaboration-empty">
+                No members matched that search. Try another name or profession.
+              </p>
+            } @else {
+              <ul class="member-list">
+                @for (profile of searchResults(); track profile.uid) {
+                  <li class="member-card">
+                    <div class="member-details">
+                      <h4>{{ profile.displayName }}</h4>
+                      <p>{{ profile.profession }}</p>
+                    </div>
+                    @switch (requestState(profile)) {
+                      @case ('connected') {
+                        <span class="member-status">Collaborator</span>
+                      }
+                      @case ('sent') {
+                        <span class="member-status">Request sent</span>
+                      }
+                      @case ('received') {
+                        <span class="member-status">Request received</span>
+                      }
+                      @default {
+                        <button
+                          class="dashboard-button dashboard-button-secondary"
+                          type="button"
+                          [disabled]="isCollaborationBusy()"
+                          [attr.aria-label]="'Send collaboration request to ' + profile.displayName"
+                          (click)="sendRequest(profile)"
+                        >
+                          Send request
+                        </button>
+                      }
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <div class="relationship-sections">
+          <section aria-labelledby="incoming-title">
+            <h3 id="incoming-title">Requests to you</h3>
+            @if (incomingRequests().length === 0) {
+              <p class="collaboration-empty">You have no incoming requests right now.</p>
+            } @else {
+              <ul class="member-list">
+                @for (entry of incomingRequests(); track entry.request.id) {
+                  <li class="member-card">
+                    <div class="member-details">
+                      <h4>{{ entry.profile?.displayName || 'CEDABILITY member' }}</h4>
+                      <p>{{ entry.profile?.profession || 'Profile not shared' }}</p>
+                    </div>
+                    <div class="request-actions">
+                      <button
+                        class="dashboard-button dashboard-button-primary"
+                        type="button"
+                        [disabled]="isCollaborationBusy()"
+                        [attr.aria-label]="
+                          'Accept request from ' +
+                          (entry.profile?.displayName || 'CEDABILITY member')
+                        "
+                        (click)="respondToRequest(entry, 'accepted')"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        class="dashboard-button dashboard-button-secondary"
+                        type="button"
+                        [disabled]="isCollaborationBusy()"
+                        [attr.aria-label]="
+                          'Decline request from ' +
+                          (entry.profile?.displayName || 'CEDABILITY member')
+                        "
+                        (click)="respondToRequest(entry, 'declined')"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section aria-labelledby="outgoing-title">
+            <h3 id="outgoing-title">Requests you've sent</h3>
+            @if (outgoingRequests().length === 0) {
+              <p class="collaboration-empty">You have no pending sent requests.</p>
+            } @else {
+              <ul class="member-list">
+                @for (entry of outgoingRequests(); track entry.request.id) {
+                  <li class="member-card">
+                    <div class="member-details">
+                      <h4>{{ entry.profile?.displayName || 'CEDABILITY member' }}</h4>
+                      <p>{{ entry.profile?.profession || 'Profile not shared' }}</p>
+                    </div>
+                    <button
+                      class="dashboard-button dashboard-button-secondary"
+                      type="button"
+                      [disabled]="isCollaborationBusy()"
+                      [attr.aria-label]="
+                        'Cancel request to ' + (entry.profile?.displayName || 'CEDABILITY member')
+                      "
+                      (click)="cancelRequest(entry)"
+                    >
+                      Cancel request
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+        </div>
+
+        <section class="accepted-section" aria-labelledby="accepted-title">
+          <h3 id="accepted-title">Your collaborators</h3>
+          @if (collaborators().length === 0) {
+            <p class="collaboration-empty">
+              When someone accepts a request, your connection will appear here.
+            </p>
+          } @else {
+            <ul class="member-list">
+              @for (collaborator of collaborators(); track collaborator.uid) {
+                <li class="member-card">
+                  <div class="member-details">
+                    <h4>{{ collaborator.profile?.displayName || 'CEDABILITY member' }}</h4>
+                    <p>{{ collaborator.profile?.profession || 'Profile not shared' }}</p>
+                  </div>
+                  <span class="member-status">Connected</span>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      }
     </section>
   }
 </main>
