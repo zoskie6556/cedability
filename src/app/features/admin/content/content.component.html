@@ -3,13 +3,213 @@
   <h2>Content</h2>
   <p>Review FAQs, publish announcements, and keep the portal messaging current.</p>
 
-  <div class="content-list">
-    <article class="card" *ngFor="let item of contentItems">
-      <div class="header-row">
-        <strong>{{ item.title }}</strong>
-        <span class="status">{{ item.status }}</span>
-      </div>
-      <div class="meta">{{ item.type }} · Updated {{ item.updated }}</div>
-    </article>
+  @if (error()) {
+    <p class="empty-state" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tabs" role="tablist" aria-label="Content type">
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.active]="activeTab() === 'announcements'"
+      [attr.aria-selected]="activeTab() === 'announcements'"
+      (click)="selectTab('announcements')"
+    >
+      Announcements <span class="count">{{ announcements().length }}</span>
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.active]="activeTab() === 'faqs'"
+      [attr.aria-selected]="activeTab() === 'faqs'"
+      (click)="selectTab('faqs')"
+    >
+      FAQs <span class="count">{{ faqs().length }}</span>
+    </button>
   </div>
+
+  @if (activeTab() === 'announcements') {
+    <!-- ------------------------------------------------------------ Announcement form -->
+    <section class="form-panel" aria-labelledby="announcement-form-title">
+      <h3 id="announcement-form-title">{{ editingAnnouncement() ? 'Edit announcement' : 'New announcement' }}</h3>
+
+      <form [formGroup]="announcementForm" (ngSubmit)="saveAnnouncement()" class="content-form">
+        <label>
+          <span>Title</span>
+          <input formControlName="title" type="text" [attr.maxlength]="titleMax" placeholder="Announcement title" />
+          @if (announcementForm.controls.title.touched && announcementForm.controls.title.invalid) {
+            <small class="field-error" role="alert">A title is required (up to {{ titleMax }} characters).</small>
+          }
+        </label>
+
+        <label>
+          <span>Message</span>
+          <textarea
+            formControlName="body"
+            rows="8"
+            [attr.maxlength]="bodyMax"
+            placeholder="Type or paste your announcement here"
+            (paste)="onAnnouncementPaste($event)"
+          ></textarea>
+          <small class="field-hint">
+            Tip: paste a full announcement into an empty message box and the first line becomes the title.
+            Formatting from Word, email or WhatsApp is cleaned up when you save.
+            ({{ announcementForm.controls.body.value.length }}/{{ bodyMax }})
+          </small>
+          @if (announcementForm.controls.body.touched && announcementForm.controls.body.invalid) {
+            <small class="field-error" role="alert">A message is required (up to {{ bodyMax }} characters).</small>
+          }
+        </label>
+
+        <label class="check">
+          <input formControlName="isPublished" type="checkbox" />
+          <span>Publish immediately</span>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button" [disabled]="saving()">
+            {{ editingAnnouncement() ? 'Save changes' : 'Save announcement' }}
+          </button>
+          <button type="button" class="secondary-button" (click)="pasteFromClipboard()">Paste from clipboard</button>
+          @if (editingAnnouncement()) {
+            <button type="button" class="secondary-button" (click)="cancelAnnouncementEdit()">Cancel</button>
+          }
+        </div>
+      </form>
+    </section>
+
+    <!-- -------------------------------------------------------------- Announcement list -->
+    @if (loading()) {
+      <app-idea-loader label="Loading content" />
+    } @else {
+      <div class="content-list">
+        @for (item of announcements(); track item.id) {
+          <article class="card">
+            <div class="header-row">
+              <strong>{{ item.title }}</strong>
+              <span class="status" [class.published]="item.isPublished">
+                {{ item.isPublished ? 'Published' : 'Draft' }}
+              </span>
+            </div>
+            <div class="meta">Announcement · Updated {{ formatDate(item.updatedAt) }}</div>
+            <p class="body-text">{{ item.body }}</p>
+            <div class="card-actions">
+              <button type="button" class="row-button" (click)="editAnnouncement(item)">Edit</button>
+              <button type="button" class="row-button" (click)="toggleAnnouncement(item)">
+                {{ item.isPublished ? 'Unpublish' : 'Publish' }}
+              </button>
+              <button type="button" class="row-button danger" (click)="deleteAnnouncement(item)">Delete</button>
+            </div>
+          </article>
+        } @empty {
+          <p class="empty-state">No announcements yet. Paste or type one above.</p>
+        }
+      </div>
+    }
+  } @else {
+    <!-- -------------------------------------------------------------------- FAQ form -->
+    <section class="form-panel" aria-labelledby="faq-form-title">
+      <h3 id="faq-form-title">{{ editingFaq() ? 'Edit FAQ' : 'New FAQ' }}</h3>
+
+      <form [formGroup]="faqForm" (ngSubmit)="saveFaq()" class="content-form">
+        <label>
+          <span>Question</span>
+          <input formControlName="question" type="text" [attr.maxlength]="questionMax" placeholder="How do I submit an idea?" />
+          @if (faqForm.controls.question.touched && faqForm.controls.question.invalid) {
+            <small class="field-error" role="alert">A question is required.</small>
+          }
+        </label>
+
+        <label>
+          <span>Answer</span>
+          <textarea formControlName="answer" rows="5" [attr.maxlength]="answerMax" placeholder="Type or paste the answer"></textarea>
+          @if (faqForm.controls.answer.touched && faqForm.controls.answer.invalid) {
+            <small class="field-error" role="alert">An answer is required.</small>
+          }
+        </label>
+
+        <div class="field-row">
+          <label>
+            <span>Category</span>
+            <input formControlName="category" type="text" placeholder="General" />
+          </label>
+          <label>
+            <span>Order</span>
+            <input formControlName="order" type="number" min="0" />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label>
+            <span>Regulatory authority (optional)</span>
+            <input formControlName="contactAuthority" type="text" />
+          </label>
+          <label>
+            <span>Contact email (optional)</span>
+            <input formControlName="contactEmail" type="email" />
+            @if (faqForm.controls.contactEmail.touched && faqForm.controls.contactEmail.invalid) {
+              <small class="field-error" role="alert">Enter a valid email address.</small>
+            }
+          </label>
+          <label>
+            <span>Contact phone (optional)</span>
+            <input formControlName="contactPhone" type="tel" placeholder="+26771234567" />
+            @if (faqForm.controls.contactPhone.touched && faqForm.controls.contactPhone.invalid) {
+              <small class="field-error" role="alert">Use the international format, for example +26771234567.</small>
+            }
+          </label>
+        </div>
+
+        <label class="check">
+          <input formControlName="isPublished" type="checkbox" />
+          <span>Published</span>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button" [disabled]="saving()">
+            {{ editingFaq() ? 'Save changes' : 'Add FAQ' }}
+          </button>
+          @if (editingFaq()) {
+            <button type="button" class="secondary-button" (click)="cancelFaqEdit()">Cancel</button>
+          }
+        </div>
+      </form>
+    </section>
+
+    <!-- ----------------------------------------------------------------------- FAQ list -->
+    @if (loading()) {
+      <app-idea-loader label="Loading content" />
+    } @else {
+      <div class="content-list">
+        @for (item of faqs(); track item.id) {
+          <article class="card">
+            <div class="header-row">
+              <strong>{{ item.question }}</strong>
+              <span class="status" [class.published]="item.isPublished">
+                {{ item.isPublished ? 'Published' : 'Draft' }}
+              </span>
+            </div>
+            <div class="meta">FAQ · {{ item.category }} · Order {{ item.order }} · Updated {{ formatDate(item.updatedAt) }}</div>
+            <p class="body-text">{{ item.answer }}</p>
+            @if (item.contactAuthority || item.contactEmail || item.contactPhone) {
+              <div class="meta">
+                Contact: {{ item.contactAuthority }} {{ item.contactEmail }} {{ item.contactPhone }}
+              </div>
+            }
+            <div class="card-actions">
+              <button type="button" class="row-button" (click)="editFaq(item)">Edit</button>
+              <button type="button" class="row-button" (click)="toggleFaq(item)">
+                {{ item.isPublished ? 'Unpublish' : 'Publish' }}
+              </button>
+              <button type="button" class="row-button danger" (click)="deleteFaq(item)">Delete</button>
+            </div>
+          </article>
+        } @empty {
+          <p class="empty-state">No FAQs yet. Add the first one above.</p>
+        }
+      </div>
+    }
+  }
 </section>

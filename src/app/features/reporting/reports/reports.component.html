@@ -1,1 +1,123 @@
-<p>reports works!</p>
+<main id="main-content" class="reports-page" [attr.aria-busy]="loading()">
+  <header class="reports-header">
+    <p class="eyebrow">Reporting</p>
+    <h1>Chat analytics</h1>
+    <p>Live chat volume, response times and outcomes.</p>
+  </header>
+
+  @if (loading()) {
+    <app-idea-loader label="Loading chat analytics" />
+  } @else if (!authorized()) {
+    <p class="reports-notice" role="alert">
+      You do not have access to this report. Support team and admin accounts only.
+    </p>
+  } @else {
+    @if (error()) {
+      <p class="reports-error" role="alert">{{ error() }}</p>
+    }
+
+    <section class="stat-cards" aria-label="Chat summary">
+      <article class="stat-card">
+        <p class="stat-label">Total chats</p>
+        <p class="stat-value">{{ summary().totalChats }}</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Resolution rate</p>
+        <p class="stat-value">{{ formatPercent(summary().resolutionRate) }}</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Avg first response</p>
+        <p class="stat-value">{{ formatResponseTime(summary().avgFirstResponseSeconds) }}</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Busiest hour</p>
+        <p class="stat-value">{{ busiestHour() !== null ? formatHour(busiestHour()!) : '—' }}</p>
+      </article>
+    </section>
+
+    <section class="report-section" aria-labelledby="status-breakdown-title">
+      <h2 id="status-breakdown-title">Chats by status</h2>
+      <table class="report-table">
+        <caption class="sr-only">Number and share of chats in each status</caption>
+        <thead>
+          <tr>
+            <th scope="col">Status</th>
+            <th scope="col">Chats</th>
+            <th scope="col">Share</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of statusRows(); track row.status) {
+            <tr>
+              <th scope="row">{{ row.label }}</th>
+              <td>{{ row.value }}</td>
+              <td>
+                <div class="status-bar-track" role="img" [attr.aria-label]="row.label + ': ' + row.percent + '%'">
+                  <div class="status-bar-fill" [class.status-waiting]="row.status === 'waiting'"
+                    [class.status-active]="row.status === 'active'"
+                    [class.status-closed]="row.status === 'closed'"
+                    [class.status-offline]="row.status === 'offline_message'"
+                    [style.width.%]="row.percent"></div>
+                </div>
+                {{ row.percent }}%
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="report-section" aria-labelledby="hourly-title">
+      <h2 id="hourly-title">Chats by hour of day</h2>
+      <div class="hour-chart" role="img" aria-labelledby="hourly-title">
+        @for (count of summary().chatsByHour; track $index) {
+          <span class="hour-bar" [style.height.%]="(count / maxHourCount()) * 100" [attr.title]="formatHour($index) + ': ' + count"></span>
+        }
+      </div>
+      <table class="report-table">
+        <caption class="sr-only">Chats started in each hour of the day</caption>
+        <thead>
+          <tr>
+            <th scope="col">Hour</th>
+            <th scope="col">Chats started</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (count of summary().chatsByHour; track $index) {
+            @if (count > 0) {
+              <tr>
+                <th scope="row">{{ formatHour($index) }}</th>
+                <td>{{ count }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="report-section" aria-labelledby="trend-title">
+      <h2 id="trend-title">Chats per day (last 30 days)</h2>
+      @if (chatsPerDayRows().length === 0) {
+        <p class="reports-empty">No chats were started in the last 30 days.</p>
+      } @else {
+        <table class="report-table">
+          <caption class="sr-only">Number of chats started on each day</caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Chats started</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of chatsPerDayRows(); track row[0]) {
+              <tr>
+                <th scope="row">{{ row[0] }}</th>
+                <td>{{ row[1] }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+</main>

@@ -26,6 +26,7 @@ announcements/{announcementId}
 
 chats/{chatId}
   └── messages/{messageId}
+agentPresence/{uid}                  # chat agent self-reported availability
 
 auditLogs/{logId}                   # append-only audit trail (Functions write only)
 settings/{docId}                    # app config, e.g. settings/chat
@@ -108,9 +109,14 @@ Evaluator worklist: `where('evaluatorUid','==',uid).where('status','!=','done')`
 - announcement: `{ title, body, publishAt, isPublished }`
 
 ### `chats/{chatId}`
-`{ userId, userName, agentId?, status: 'waiting'|'active'|'closed'|'offline_message', startedAt, closedAt?, lastMessageAt }`
-- `chats/{chatId}/messages/{messageId}`: `{ senderUid, senderRole, text, createdAt }`
-- Business hours live in `settings/chat`: `{ timezone: 'Africa/Gaborone', days: [1,2,3,4,5], open: '09:00', close: '16:00', holidays: ['YYYY-MM-DD'] }`
+`{ userId, userName, status: 'waiting'|'active'|'closed'|'offline_message', handledBy, handledByName, startedAt, closedAt, lastMessageAt, firstResponseAt }`
+`handledBy`/`handledByName`/`closedAt`/`firstResponseAt` are `null` until set. A chat starts as `waiting` (an agent is expected to respond live) or `offline_message` (created outside business hours or when no agent is available; the client leaves one message for later follow-up). An agent "claims" a `waiting` chat by setting `handledBy`/`handledByName` and moving it to `active`; only that agent may update the chat afterwards.
+- `chats/{chatId}/messages/{messageId}`: `{ senderUid, senderRole, text, createdAt }`. Sending a message updates the parent chat's `lastMessageAt` (and `firstResponseAt`, once, on the assigned agent's first reply) in the same batch.
+- Business hours live in `settings/chat`: `{ timezone: 'Africa/Gaborone', days: [1,2,3,4,5], open: '09:00', close: '16:00', holidays: ['YYYY-MM-DD'] }`. `days` uses ISO weekday numbers (1 = Monday ... 7 = Sunday).
+
+### `agentPresence/{uid}`  (doc ID = agent's UID)
+`{ uid, displayName, isAvailable, activeChatCount, maxConcurrentChats, updatedAt }`
+An agent toggles their own `isAvailable` from the chat console; `activeChatCount` is incremented/decremented by the console as the agent claims/closes chats. Readable by any signed-in user (to decide whether live chat is offered); writable only by the agent themselves or an admin. Like other client-maintained counters in this app, `activeChatCount` is client-trusted, not Functions-verified.
 
 ### `stats/{docId}`  (written by Functions only)
 `stats/overview`: `{ totalIdeas, byStatus: {...}, byCategory: {...}, totalUsers, avgDaysPerStage: {...}, updatedAt }`
@@ -141,7 +147,8 @@ Status changes go through a Cloud Function (or a rules-restricted write), which 
 | statusHistory | tracking | no (Functions) | owner, staff |
 | assignments, stages, criteriaSets | evaluation / admin | admin | assigned evaluator, admin |
 | formDefinitions, faqs, announcements | admin | admin | everyone signed in (published only) |
-| chats, messages | chat | participants | participants, agents |
+| chats, messages | chat | participants: create/update own chat & messages; agent: claim + update assigned chat | owner, agents, admin |
+| agentPresence | chat | the agent themselves; admin | everyone signed in |
 | stats | reporting | no | admin, adjudicator |
 | auditLogs | core | no | admin |
 | awards | evaluation | admin | owner; public if `isPublic` |

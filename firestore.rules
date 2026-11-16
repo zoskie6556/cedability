@@ -31,6 +31,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.role in ['evaluator', 'adjudicator', 'admin'];
     }
 
+    function isAgent() {
+      return request.auth != null && request.auth.token.role in ['agent', 'admin'];
+    }
+
     function canReadIdea(ownerId) {
       return request.auth != null
         && (request.auth.uid == ownerId || isEvaluator());
@@ -197,6 +201,101 @@ service cloud.firestore {
         && (profile.passwordLastSetAt == null || profile.passwordLastSetAt is timestamp)
         && profile.onboardingCompleted is bool
         && (profile.onboardingCompletedAt == null || profile.onboardingCompletedAt is timestamp);
+    }
+
+    function isValidNewChat() {
+      return request.resource.data.keys().hasAll([
+          'userId', 'userName', 'status', 'handledBy', 'handledByName',
+          'startedAt', 'closedAt', 'lastMessageAt', 'firstResponseAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'userId', 'userName', 'status', 'handledBy', 'handledByName',
+          'startedAt', 'closedAt', 'lastMessageAt', 'firstResponseAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && isBoundedString(request.resource.data.userName, 120)
+        && request.resource.data.status in ['waiting', 'offline_message']
+        && request.resource.data.handledBy == null
+        && request.resource.data.handledByName == null
+        && request.resource.data.startedAt == request.time
+        && request.resource.data.closedAt == null
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.firstResponseAt == null;
+    }
+
+    function isValidOwnerChatUpdate() {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return resource.data.status in ['waiting', 'active', 'offline_message']
+        && ((changedKeys.hasOnly(['lastMessageAt'])
+              && request.resource.data.lastMessageAt == request.time)
+            || (changedKeys.hasOnly(['status', 'closedAt'])
+              && request.resource.data.status == 'closed'
+              && request.resource.data.closedAt == request.time));
+    }
+
+    function isValidAgentChatClaim() {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return resource.data.handledBy == null
+        && resource.data.status == 'waiting'
+        && changedKeys.hasOnly(['handledBy', 'handledByName', 'status'])
+        && request.resource.data.handledBy == request.auth.uid
+        && isBoundedString(request.resource.data.handledByName, 120)
+        && request.resource.data.status == 'active';
+    }
+
+    function isValidAgentChatUpdate() {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return resource.data.handledBy == request.auth.uid
+        && changedKeys.hasOnly(['lastMessageAt', 'firstResponseAt', 'status', 'closedAt'])
+        && (request.resource.data.lastMessageAt == resource.data.lastMessageAt
+            || request.resource.data.lastMessageAt == request.time)
+        && (request.resource.data.firstResponseAt == resource.data.firstResponseAt
+            || request.resource.data.firstResponseAt == request.time)
+        && request.resource.data.status in ['active', 'closed']
+        && (request.resource.data.status != 'closed' || request.resource.data.closedAt == request.time);
+    }
+
+    function isValidNewChatMessage(chatId) {
+      let chat = get(/databases/$(database)/documents/chats/$(chatId)).data;
+      return request.resource.data.keys().hasAll(['senderUid', 'senderRole', 'text', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['senderUid', 'senderRole', 'text', 'createdAt'])
+        && request.resource.data.senderUid == request.auth.uid
+        && isBoundedString(request.resource.data.senderRole, 30)
+        && isBoundedString(request.resource.data.text, 4000)
+        && request.resource.data.text.size() > 0
+        && request.resource.data.createdAt == request.time
+        && chat.status != 'closed'
+        && (signedInAs(chat.userId) || (isAgent() && chat.handledBy == request.auth.uid));
+    }
+
+    function isValidAgentPresence(uid) {
+      return request.resource.data.keys().hasAll([
+          'uid', 'displayName', 'isAvailable', 'activeChatCount', 'maxConcurrentChats', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'isAvailable', 'activeChatCount', 'maxConcurrentChats', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && isBoundedString(request.resource.data.displayName, 120)
+        && request.resource.data.isAvailable is bool
+        && request.resource.data.activeChatCount is int
+        && request.resource.data.activeChatCount >= 0
+        && request.resource.data.maxConcurrentChats is int
+        && request.resource.data.maxConcurrentChats > 0
+        && request.resource.data.maxConcurrentChats <= 20
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidChatSettings() {
+      return request.resource.data.keys().hasAll(['timezone', 'days', 'open', 'close', 'holidays'])
+        && request.resource.data.keys().hasOnly(['timezone', 'days', 'open', 'close', 'holidays'])
+        && isBoundedString(request.resource.data.timezone, 60)
+        && request.resource.data.days is list
+        && request.resource.data.days.size() <= 7
+        && isBoundedString(request.resource.data.open, 5)
+        && isBoundedString(request.resource.data.close, 5)
+        && request.resource.data.holidays is list
+        && request.resource.data.holidays.size() <= 60;
     }
 
     function isValidUser(userId) {
@@ -439,6 +538,37 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow get, list: if isAdmin();
       allow create, update, delete: if false;
+    }
+
+    match /chats/{chatId} {
+      allow get, list: if signedInAs(resource.data.userId) || isAgent();
+      allow create: if isValidNewChat();
+      allow update: if (isAgent() && (isValidAgentChatClaim() || isValidAgentChatUpdate()))
+        || (signedInAs(resource.data.userId) && isValidOwnerChatUpdate());
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if signedInAs(get(/databases/$(database)/documents/chats/$(chatId)).data.userId)
+          || isAgent();
+        allow create: if isValidNewChatMessage(chatId);
+        allow update, delete: if false;
+      }
+    }
+
+    match /agentPresence/{uid} {
+      allow get, list: if request.auth != null;
+      allow create, update: if (signedInAs(uid)
+            && request.auth.token.role == 'agent'
+            && isValidAgentPresence(uid))
+          || (isAdmin() && isValidAgentPresence(uid));
+      allow delete: if false;
+    }
+
+    match /settings/{documentId} {
+      allow get: if documentId == 'chat' && request.auth != null;
+      allow list: if false;
+      allow create, update: if documentId == 'chat' && isAdmin() && isValidChatSettings();
+      allow delete: if documentId == 'chat' && isAdmin();
     }
 
     match /{document=**} {

@@ -1,0 +1,82 @@
+<main id="main-content" class="agent-console" [attr.aria-busy]="loading()">
+  @if (loading()) {
+    <app-idea-loader label="Loading the chat console" />
+  } @else if (!authorized()) {
+    <p class="console-notice" role="alert">
+      You do not have access to the chat console. Support team and admin accounts only.
+    </p>
+  } @else {
+    <header class="console-header">
+      <div>
+        <p class="eyebrow">CEDA Support</p>
+        <h1>Live chat console</h1>
+      </div>
+      <div class="console-availability">
+        <span class="capacity-label">{{ capacityLabel() }}</span>
+        <button
+          type="button"
+          class="availability-toggle"
+          [class.is-available]="isAvailable()"
+          [disabled]="togglingAvailability()"
+          [attr.aria-pressed]="isAvailable()"
+          (click)="toggleAvailability()"
+        >
+          {{ isAvailable() ? 'Available' : 'Unavailable' }}
+        </button>
+      </div>
+    </header>
+
+    <div class="console-body">
+      <section class="console-queue" aria-label="Chat queue">
+        <h2>Waiting ({{ waitingChats().length }})</h2>
+        @if (waitingChats().length === 0) {
+          <p class="queue-empty">No one is waiting right now.</p>
+        }
+        @for (chat of waitingChats(); track chat.id) {
+          <article class="queue-item">
+            <div>
+              <p class="queue-item-name">{{ chat.userName }}</p>
+              <p class="queue-item-time">Waiting since {{ chat.startedAt | date: 'shortTime' }}</p>
+            </div>
+            <button type="button" class="queue-claim" (click)="claim(chat)">Claim</button>
+          </article>
+        }
+
+        <h2>Your active chats ({{ myActiveChats().length }})</h2>
+        @if (myActiveChats().length === 0) {
+          <p class="queue-empty">You have no active chats.</p>
+        }
+        @for (chat of myActiveChats(); track chat.id) {
+          <button
+            type="button"
+            class="queue-item queue-item-button"
+            [class.is-selected]="selectedChatId() === chat.id"
+            (click)="selectChat(chat.id)"
+          >
+            <span class="queue-item-name">{{ chat.userName }}</span>
+            <span class="queue-item-time">{{ statusLabelFor(chat) }}</span>
+          </button>
+        }
+      </section>
+
+      <section class="console-conversation" aria-label="Selected conversation">
+        @if (selectedChat(); as chat) {
+          <app-chat-conversation
+            class="console-conversation-host"
+            [messages]="selectedMessages()"
+            [currentUid]="uid()"
+            [statusLabel]="statusLabelFor(chat)"
+            [disabled]="chat.status === 'closed'"
+            placeholder="Reply to the client..."
+            (send)="send($event)"
+          />
+          <div class="console-conversation-actions">
+            <button type="button" class="console-close-chat" (click)="closeSelectedChat()">Close chat</button>
+          </div>
+        } @else {
+          <p class="console-conversation-empty">Select a chat from the queue to start replying.</p>
+        }
+      </section>
+    </div>
+  }
+</main>

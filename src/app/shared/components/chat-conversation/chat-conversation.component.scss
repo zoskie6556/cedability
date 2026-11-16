@@ -1,0 +1,139 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-conversation {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.conversation-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--line, #eadfd8);
+  background: #fff6ee;
+  color: var(--muted, #6d625d);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem;
+}
+
+.message-list-hint {
+  margin: auto;
+  color: var(--muted, #6d625d);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.message-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.9rem;
+  border-bottom-left-radius: 0.25rem;
+  background: #fff;
+  border: 1px solid var(--line, #eadfd8);
+  align-self: flex-start;
+}
+
+.message-own {
+  align-self: flex-end;
+  border-bottom-left-radius: 0.9rem;
+  border-bottom-right-radius: 0.25rem;
+  background: var(--ceda-primary, #c53e13);
+  border-color: var(--ceda-primary, #c53e13);
+  color: #fff;
+}
+
+.message-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message-time {
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  opacity: 0.7;
+  align-self: flex-end;
+}
+
+.composer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--line, #eadfd8);
+  background: #fff;
+}
+
+.composer-input {
+  flex: 1 1 auto;
+  resize: none;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--line, #eadfd8);
+  font: inherit;
+  font-size: 0.88rem;
+  min-height: 2.4rem;
+  max-height: 6rem;
+}
+
+.composer-input:disabled {
+  background: #f4efe9;
+  color: var(--muted, #6d625d);
+}
+
+.composer-send {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  padding: 0.6rem 1rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: var(--ceda-primary, #c53e13);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.composer-send:disabled {
+  background: #d8cfc8;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-list {
+    scroll-behavior: auto;
+  }
+}

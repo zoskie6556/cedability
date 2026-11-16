@@ -4,6 +4,8 @@ import { FirebaseApp, provideFirebaseApp } from '@angular/fire/app';
 import { getAuth, provideAuth } from '@angular/fire/auth';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { getFunctions, provideFunctions } from '@angular/fire/functions';
+import { getStorage, provideStorage } from '@angular/fire/storage';
+
 import { provideRouter, withInMemoryScrolling } from '@angular/router';
 import { getAnalytics } from 'firebase/analytics';
 import { initializeApp } from 'firebase/app';
@@ -20,5 +22,6 @@ export const appConfig: ApplicationConfig = {
     provideFirestore(() => getFirestore(inject(FirebaseApp))),
     provideFunctions(() => getFunctions(inject(FirebaseApp))),
     provideAnalytics(() => getAnalytics()),
+    provideStorage(() => getStorage(inject(FirebaseApp))),
   ],
 };

@@ -1,36 +1,108 @@
 <a class="skip-link" href="#main-content">Skip to content</a>
 
 <header class="site-header">
-  <div class="header-inner">
-    <a class="brand" routerLink="/" aria-label="CEDAbility home">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 40 40" fill="none">
-          <path d="M20 3.5 34 11.6v16.8L20 36.5 6 28.4V11.6L20 3.5Z" />
-          <path d="M25.8 14.5a8 8 0 1 0 0 11" />
-          <path d="m22.5 20 3.1 3.1 6-7" />
-        </svg>
-      </span>
-      <span class="brand-name">CEDA<span>bility</span></span>
-    </a>
+  <div class="container">
+    <!-- ===================================================== Top bar -->
+    <div class="top-bar">
+      <a class="brand" routerLink="/" aria-label="CEDAbility home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" fill="none">
+            <path d="M20 3.5 34 11.6v16.8L20 36.5 6 28.4V11.6L20 3.5Z" />
+            <path d="M25.8 14.5a8 8 0 1 0 0 11" />
+            <path d="m22.5 20 3.1 3.1 6-7" />
+          </svg>
+        </span>
+        <span class="brand-name">CEDA<span>bility</span></span>
+      </a>
 
-    <div class="header-actions">
-      @if (authStateReady() && !authUser()) {
-        <a class="header-login" routerLink="/account/user/login" aria-label="Log in">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
-            <path d="M10 12h10m-4-4 4 4-4 4" />
+      <!-- Animated orb that fills the gap between the logo and the account buttons.
+           Intentionally does nothing yet: no route and no click handler. -->
+      <div class="voice-orb-slot">
+        <button
+          class="voice-orb"
+          type="button"
+          aria-label="Voice assistant (coming soon)"
+          title="Voice assistant (coming soon)"
+        >
+          <span class="voice-orb-sphere" aria-hidden="true"></span>
+          <span class="voice-orb-play" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+            </svg>
+          </span>
+        </button>
+      </div>
+
+      <!-- Language toggle. Visual only for now: translation is not implemented yet. -->
+      <div class="lang-toggle" role="group" aria-label="Language" [attr.data-language]="language()">
+        <span class="lang-thumb" aria-hidden="true"></span>
+        <button
+          class="lang-option"
+          type="button"
+          [attr.aria-pressed]="language() === 'tn'"
+          (click)="setLanguage('tn')"
+        >
+          <!-- Botswana flag (inline SVG, because Windows does not draw flag emoji) -->
+          <svg class="flag" viewBox="0 0 36 24" aria-hidden="true" focusable="false">
+            <rect width="36" height="24" fill="#75aadb" />
+            <rect y="8.3" width="36" height="7.4" fill="#fff" />
+            <rect y="9.2" width="36" height="5.6" fill="#000" />
           </svg>
-          <span>Log in</span>
-        </a>
-        <a class="header-signup" routerLink="/account/user/create-account" aria-label="Sign up">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-4A4.5 4.5 0 0 0 2 18.5V20" />
-            <circle cx="8.5" cy="7" r="4" />
-            <path d="M19 8v8m-4-4h8" />
+          <span lang="tn">Dirisa Setswana</span>
+        </button>
+        <button
+          class="lang-option"
+          type="button"
+          [attr.aria-pressed]="language() === 'en'"
+          (click)="setLanguage('en')"
+        >
+          <!-- United Kingdom flag -->
+          <svg class="flag" viewBox="0 0 36 24" aria-hidden="true" focusable="false">
+            <rect width="36" height="24" fill="#012169" />
+            <path d="M0 0 36 24M36 0 0 24" stroke="#fff" stroke-width="4.8" />
+            <path d="M0 0 36 24M36 0 0 24" stroke="#c8102e" stroke-width="1.6" />
+            <path d="M18 0v24M0 12h36" stroke="#fff" stroke-width="8" />
+            <path d="M18 0v24M0 12h36" stroke="#c8102e" stroke-width="4.8" />
           </svg>
-          <span>Sign up</span>
-        </a>
-      }
+          <span lang="en">Use English</span>
+        </button>
+      </div>
+
+      <div class="auth-actions">
+        @if (authStateReady() && !authUser()) {
+          <a class="header-login" routerLink="/account/user/login" aria-label="Log in">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
+              <path d="M10 12h10m-4-4 4 4-4 4" />
+            </svg>
+            <span>Log in</span>
+          </a>
+          <a class="header-signup" routerLink="/account/user/create-account" aria-label="Sign up">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-4A4.5 4.5 0 0 0 2 18.5V20" />
+              <circle cx="8.5" cy="7" r="4" />
+              <path d="M19 8v8m-4-4h8" />
+            </svg>
+            <span>Sign up</span>
+          </a>
+        }
+        @if (authUser()) {
+          <button
+            class="header-signup header-logout"
+            type="button"
+            [disabled]="isLoggingOut()"
+            [attr.aria-busy]="isLoggingOut()"
+            (click)="logout()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" />
+              <path d="m16 17 5-5-5-5M21 12H10" />
+            </svg>
+            <span>{{ isLoggingOut() ? 'Logging out...' : 'Log out' }}</span>
+          </button>
+        }
+      </div>
+
       <button
         class="menu-toggle"
         type="button"
@@ -51,6 +123,7 @@
       </button>
     </div>
 
+    <!-- ================================================= Main navigation -->
     <nav
       class="main-nav"
       id="main-navigation"
@@ -181,15 +254,19 @@
         VoiceCommand
       </a>
     </nav>
-
   </div>
 </header>
 
-<router-outlet />
+<!-- Every routed page is rendered inside the shared container, so all pages get the same edge padding. -->
+<div class="container page-content">
+  <router-outlet />
+</div>
+
 <app-toast-outlet />
+<app-chat-widget />
 
 <footer class="site-footer">
-  <div class="footer-inner">
+  <div class="container footer-inner">
     <a class="brand footer-brand" routerLink="/" aria-label="CEDAbility home">
       <span class="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 40 40" fill="none">

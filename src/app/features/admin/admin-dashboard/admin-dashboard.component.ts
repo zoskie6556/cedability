@@ -31,6 +31,11 @@ export class AdminDashboardComponent {
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18c1.1-2.4 3-3.6 5.5-3.6S9.3 15.6 12 18M7.5 9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm9.5 2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Zm-2.1 8.2c.9-1.9 2.5-3.1 4.5-3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     },
     {
+      label: 'Tickets',
+      path: '/admin/tickets',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    },
+    {
       label: 'Ideas',
       path: '/admin/ideas',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 5 9.5l-1.2 1.4a4 4 0 0 0-.8 2.1V17H9v-1c0-.8-.3-1.6-.8-2.1L7 12.5A6 6 0 0 1 12 3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',

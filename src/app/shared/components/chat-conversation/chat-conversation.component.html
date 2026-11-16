@@ -1,0 +1,41 @@
+<div class="chat-conversation">
+  @if (statusLabel()) {
+    <p class="conversation-status" role="status">{{ statusLabel() }}</p>
+  }
+
+  <div #messageList class="message-list" aria-live="polite" aria-label="Chat messages">
+    @if (loading()) {
+      <p class="message-list-hint">Loading messages...</p>
+    } @else if (messages().length === 0) {
+      <p class="message-list-hint">No messages yet. Say hello to get started.</p>
+    }
+
+    @for (message of messages(); track message.id) {
+      <article
+        class="message-bubble"
+        [class.message-own]="isOwnMessage(message)"
+        [attr.aria-label]="(isOwnMessage(message) ? 'You' : message.senderRole) + ' at ' + formatTime(message.createdAt)"
+      >
+        <p class="message-text">{{ message.text }}</p>
+        <span class="message-time">{{ formatTime(message.createdAt) }}</span>
+      </article>
+    }
+  </div>
+
+  <form class="composer" (submit)="$event.preventDefault(); submit()">
+    <label class="sr-only" for="chat-composer-input">Message</label>
+    <textarea
+      id="chat-composer-input"
+      class="composer-input"
+      rows="2"
+      [value]="draft()"
+      [placeholder]="placeholder()"
+      [disabled]="disabled()"
+      (input)="onDraftInput($event)"
+      (keydown)="onComposerKeydown($event)"
+    ></textarea>
+    <button type="submit" class="composer-send" [disabled]="disabled() || !draft().trim()">
+      Send
+    </button>
+  </form>
+</div>

@@ -16,10 +16,11 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { AuthService } from './core/services/auth.service';
 import { ToastService } from './core/services/toast.service';
 import { ToastOutletComponent } from './shared/components/toast-outlet/toast-outlet.component';
+import { ChatWidgetComponent } from './shared/components/chat-widget/chat-widget.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, ToastOutletComponent],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, ToastOutletComponent, ChatWidgetComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +43,8 @@ export class App {
   protected readonly mobileMenuOpen = signal(false);
   protected readonly profileMenuOpen = signal(false);
   protected readonly isLoggingOut = signal(false);
+  // Visual only for now: the language toggle does not translate anything yet.
+  protected readonly language = signal<'tn' | 'en'>('en');
   private readonly closeProfileMenuOnSignOut = effect(() => {
     if (this.authUser() === null) {
       this.profileMenuOpen.set(false);
@@ -57,6 +60,10 @@ export class App {
 
   protected closeMobileMenu(): void {
     this.mobileMenuOpen.set(false);
+  }
+
+  protected setLanguage(language: 'tn' | 'en'): void {
+    this.language.set(language);
   }
 
   protected toggleProfileMenu(event: MouseEvent): void {

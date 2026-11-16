@@ -3,26 +3,114 @@
   <h2>Audit log</h2>
   <p>Inspect who changed what, when, and why across the admin workspace.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Actor</th>
-        <th>Action</th>
-        <th>Target</th>
-        <th>When</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let entry of auditEntries">
-        <td>{{ entry.actor }}</td>
-        <td>{{ entry.action }}</td>
-        <td>{{ entry.target }}</td>
-        <td>{{ entry.timestamp }}</td>
-        <td>
-          <span class="status status-{{ entry.status }}">{{ entry.status }}</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  @if (error()) {
+    <p class="empty-state" role="alert">{{ error() }}</p>
+  }
+
+  <div class="toolbar">
+    <label class="search-field">
+      <span class="sr-only">Search the audit log</span>
+      <input
+        type="search"
+        placeholder="Search actor, action, target or details"
+        [value]="search()"
+        (input)="onSearch($event)"
+      />
+    </label>
+
+    <select class="filter-select" aria-label="Filter by action" [value]="actionFilter()" (change)="onActionFilter($event)">
+      <option value="all">All actions</option>
+      @for (action of actionOptions(); track action) {
+        <option [value]="action" [selected]="action === actionFilter()">{{ actionLabel(action) }}</option>
+      }
+    </select>
+
+    <select class="filter-select" aria-label="Filter by record type" [value]="entityFilter()" (change)="onEntityFilter($event)">
+      <option value="all">All record types</option>
+      @for (entity of entityOptions(); track entity) {
+        <option [value]="entity" [selected]="entity === entityFilter()">{{ entity }}</option>
+      }
+    </select>
+
+    <label class="date-field">
+      <span>From</span>
+      <input type="date" [value]="fromDate()" (change)="onFromDate($event)" />
+    </label>
+
+    <label class="date-field">
+      <span>To</span>
+      <input type="date" [value]="toDate()" (change)="onToDate($event)" />
+    </label>
+
+    @if (hasActiveFilters()) {
+      <button type="button" class="secondary-button" (click)="clearFilters()">Clear filters</button>
+    }
+
+    <button type="button" class="primary-button push-right" (click)="exportCsv()">Export CSV</button>
+  </div>
+
+  @if (loading()) {
+    <app-idea-loader label="Loading audit log" />
+  } @else {
+    <p class="result-count" role="status" aria-live="polite">
+      Showing {{ pageRows().length }} of {{ filtered().length }} matching entries
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">Actor</th>
+            <th scope="col">Action</th>
+            <th scope="col">Target</th>
+            <th scope="col">Details</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of pageRows(); track entry.id) {
+            <tr>
+              <td>{{ formatDate(entry.at) }}</td>
+              <td>
+                <strong>{{ entry.actorName }}</strong>
+                @if (entry.actorRole) {
+                  <div class="sub-text">{{ entry.actorRole }}</div>
+                }
+              </td>
+              <td>
+                {{ actionLabel(entry.action) }}
+                <div class="sub-text">{{ entry.action }}</div>
+              </td>
+              <td [attr.title]="entry.entityId">{{ target(entry) }}</td>
+              <td class="details-cell">{{ entry.summary || '—' }}</td>
+              <td>
+                <span class="status" [class]="'status status-' + severity(entry)">{{ severity(entry) }}</span>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="empty-state">
+                @if (hasActiveFilters()) {
+                  No entries match the current filters.
+                } @else {
+                  No audit entries yet. They appear here as soon as an admin action is recorded.
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <button type="button" class="secondary-button" [disabled]="page() === 0" (click)="previousPage()">Previous</button>
+      <span>Page {{ page() + 1 }} of {{ pageCount() }}</span>
+      <button type="button" class="secondary-button" [disabled]="page() >= pageCount() - 1" (click)="nextPage()">Next</button>
+
+      @if (canLoadMore()) {
+        <button type="button" class="secondary-button push-right" (click)="loadMore()">Load older entries</button>
+      }
+    </div>
+  }
 </section>

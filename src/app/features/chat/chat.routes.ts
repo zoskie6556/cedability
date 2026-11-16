@@ -7,4 +7,9 @@ export const CHAT_ROUTES: Routes = [
     title: 'Chat',
     loadComponent: () => import('./chat-room/chat-room.component').then(m => m.ChatRoomComponent),
   },
+  {
+    path: 'agent-console',
+    title: 'Chat console',
+    loadComponent: () => import('./agent-console/agent-console.component').then(m => m.AgentConsoleComponent),
+  },
 ];

@@ -1,1 +1,38 @@
-<p>chat-room works!</p>
+<main id="main-content" class="chat-room-page" [attr.aria-busy]="loading()">
+  <header class="chat-room-header">
+    <p class="eyebrow">CEDA Support</p>
+    <h1>Chat with us</h1>
+    <p>Ask about your submission or any other enquiry. Live chat is available 09:00-16:00 on working days.</p>
+  </header>
+
+  @if (!signedIn()) {
+    <p class="chat-room-notice" role="status">
+      Please <a routerLink="/account/user/login">log in</a> to start a chat with our team.
+    </p>
+  } @else if (loading()) {
+    <app-idea-loader label="Connecting you to support" />
+  } @else {
+    @if (unavailableNotice()) {
+      <p class="chat-room-notice" role="status">{{ unavailableNotice() }}</p>
+    }
+    @if (error()) {
+      <p class="chat-room-error" role="alert">{{ error() }}</p>
+    }
+
+    <section class="chat-room-panel" aria-label="Chat conversation">
+      <app-chat-conversation
+        class="chat-room-conversation"
+        [messages]="messages()"
+        [currentUid]="uid()"
+        [statusLabel]="statusLabel()"
+        [disabled]="chat()?.status === 'closed'"
+        placeholder="Type your message..."
+        (send)="send($event)"
+      />
+    </section>
+
+    @if (chat() && chat()?.status !== 'closed') {
+      <button type="button" class="chat-room-end" (click)="endChat()">End chat</button>
+    }
+  }
+</main>

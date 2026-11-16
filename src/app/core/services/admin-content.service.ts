@@ -10,281 +10,253 @@ import {
   serverTimestamp,
   updateDoc,
   type DocumentData,
-  type FirestoreError,
   type Unsubscribe,
 } from '@angular/fire/firestore';
 
-export type ContentKind = 'announcement' | 'faq';
-export type ContentStatus = 'published' | 'draft';
-
-export interface AdminContentEntry {
+export interface AnnouncementRow {
   id: string;
-  kind: ContentKind;
-  kindLabel: 'Announcement' | 'FAQ';
-  /** Announcement title, or the FAQ question. */
-  title: string;
-  /** Announcement text, or the FAQ answer. */
-  body: string;
-  /** Shortened body for list cards. */
-  preview: string;
-  status: ContentStatus;
-  statusLabel: 'Published' | 'Draft';
-  updated: string;
-  updatedBy: string;
-}
-
-export interface ContentDraft {
-  kind: ContentKind;
   title: string;
   body: string;
-  status: ContentStatus;
+  isPublished: boolean;
+  publishAt: Date | null;
+  updatedAt: Date | null;
 }
 
-/** Firestore collection for each kind of content (see the database schema). */
-const COLLECTION_BY_KIND: Record<ContentKind, string> = {
-  announcement: 'announcements',
-  faq: 'faqs',
-};
+export interface AnnouncementInput {
+  title: string;
+  body: string;
+  isPublished: boolean;
+}
 
-export const CONTENT_TITLE_MAX = 150;
-export const CONTENT_BODY_MAX = 5000;
-const PREVIEW_LENGTH = 180;
+export interface FaqRow {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  order: number;
+  isPublished: boolean;
+  contactAuthority: string;
+  contactEmail: string;
+  contactPhone: string;
+  updatedAt: Date | null;
+}
 
-interface Row {
-  entry: AdminContentEntry;
-  time: number;
+export interface FaqInput {
+  question: string;
+  answer: string;
+  category: string;
+  order: number;
+  isPublished: boolean;
+  contactAuthority: string;
+  contactEmail: string;
+  contactPhone: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class AdminContentService {
   private readonly firestore = inject(Firestore);
-  private readonly auth = inject(Auth, { optional: true });
+  private readonly auth = inject(Auth);
 
-  // ---- Live content (announcements + FAQs together, newest first) ----
-  readonly entries = signal<AdminContentEntry[]>([]);
+  readonly announcements = signal<AnnouncementRow[]>([]);
+  readonly faqs = signal<FaqRow[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
-  // ---- Action state ----
-  readonly saving = signal(false);
-  readonly actionError = signal<string | null>(null);
-  /** Id of the entry being published, unpublished or deleted, or null. */
-  readonly busyId = signal<string | null>(null);
-
   private unsubscribers: Unsubscribe[] = [];
+  private readonly failures = new Map<string, string>();
+  private loaded = new Set<string>();
 
-  startLive(destroyRef?: DestroyRef): void {
-    this.stopLive();
+  /** Real-time listeners for both collections. Pass a DestroyRef to stop them automatically. */
+  watch(destroyRef?: DestroyRef): void {
+    this.stop();
+    this.failures.clear();
+    this.loaded = new Set();
     this.loading.set(true);
-    this.error.set(null);
 
-    let announcements: Row[] = [];
-    let faqs: Row[] = [];
-    const received = new Set<ContentKind>();
+    this.unsubscribers.push(
+      this.listen('announcements', docs => {
+        const rows = docs.map(({ id, data }) => this.toAnnouncement(id, data));
+        rows.sort((left, right) => this.time(right.publishAt ?? right.updatedAt) - this.time(left.publishAt ?? left.updatedAt));
+        this.announcements.set(rows);
+      }),
+    );
 
-    const publish = (kind: ContentKind): void => {
-      received.add(kind);
-      this.entries.set(
-        [...announcements, ...faqs].sort((left, right) => right.time - left.time).map(row => row.entry),
-      );
-      this.error.set(null);
-      if (received.size === 2) {
-        this.loading.set(false);
-      }
-    };
+    this.unsubscribers.push(
+      this.listen('faqs', docs => {
+        const rows = docs.map(({ id, data }) => this.toFaq(id, data));
+        rows.sort((left, right) => left.order - right.order || left.question.localeCompare(right.question));
+        this.faqs.set(rows);
+      }),
+    );
 
-    (Object.keys(COLLECTION_BY_KIND) as ContentKind[]).forEach(kind => {
-      const name = COLLECTION_BY_KIND[kind];
-      this.unsubscribers.push(
-        onSnapshot(
-          collection(this.firestore, name),
-          snap => {
-            const rows = snap.docs.map(document => this.toRow(kind, document.id, document.data()));
-            if (kind === 'announcement') {
-              announcements = rows;
-            } else {
-              faqs = rows;
-            }
-            publish(kind);
-          },
-          (error: FirestoreError) => {
-            console.error(`[AdminContentService] could not read "${name}" (${error.code})`, error);
-            this.error.set(`Could not load ${name} (${error.code}).`);
-            this.loading.set(false);
-          },
-        ),
-      );
-    });
-
-    destroyRef?.onDestroy(() => this.stopLive());
+    destroyRef?.onDestroy(() => this.stop());
   }
 
-  stopLive(): void {
+  stop(): void {
     this.unsubscribers.forEach(unsubscribe => unsubscribe());
     this.unsubscribers = [];
   }
 
-  /** Returns a human-readable problem with the draft, or null when it can be saved. */
-  validate(draft: ContentDraft): string | null {
-    const isFaq = draft.kind === 'faq';
-    const title = draft.title.trim();
-    const body = draft.body.trim();
+  // ---- Announcements ----
 
-    if (!title) {
-      return isFaq ? 'Enter the question.' : 'Enter a title for the announcement.';
-    }
-    if (title.length > CONTENT_TITLE_MAX) {
-      return `The ${isFaq ? 'question' : 'title'} must be ${CONTENT_TITLE_MAX} characters or fewer.`;
-    }
-    if (!body) {
-      return isFaq ? 'Enter the answer.' : 'Enter the announcement text.';
-    }
-    if (body.length > CONTENT_BODY_MAX) {
-      return `The ${isFaq ? 'answer' : 'text'} must be ${CONTENT_BODY_MAX} characters or fewer.`;
-    }
-    return null;
+  async createAnnouncement(input: AnnouncementInput): Promise<void> {
+    await addDoc(collection(this.firestore, 'announcements'), {
+      title: input.title,
+      body: input.body,
+      isPublished: input.isPublished,
+      publishAt: input.isPublished ? serverTimestamp() : null,
+      createdBy: this.auth.currentUser?.uid ?? null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
 
-  /** Creates a new entry, or updates `existing`. Resolves true on success. */
-  async save(draft: ContentDraft, existing: AdminContentEntry | null): Promise<boolean> {
-    const problem = this.validate(draft);
-    if (problem) {
-      this.actionError.set(problem);
-      return false;
+  async updateAnnouncement(row: AnnouncementRow, input: AnnouncementInput): Promise<void> {
+    const changes: Record<string, unknown> = {
+      title: input.title,
+      body: input.body,
+      isPublished: input.isPublished,
+      updatedAt: serverTimestamp(),
+    };
+    if (input.isPublished && !row.publishAt) {
+      changes['publishAt'] = serverTimestamp();
     }
-
-    const kind = existing?.kind ?? draft.kind;
-    const title = draft.title.trim();
-    const body = draft.body.trim();
-    const fields = kind === 'faq' ? { question: title, answer: body } : { title, body };
-    const actor = this.actor();
-    const becomesPublished = draft.status === 'published' && existing?.status !== 'published';
-
-    this.saving.set(true);
-    this.actionError.set(null);
-
-    try {
-      if (existing) {
-        await updateDoc(doc(this.firestore, COLLECTION_BY_KIND[kind], existing.id), {
-          ...fields,
-          status: draft.status,
-          updatedAt: serverTimestamp(),
-          updatedBy: actor,
-          ...(becomesPublished ? { publishedAt: serverTimestamp() } : {}),
-        });
-      } else {
-        await addDoc(collection(this.firestore, COLLECTION_BY_KIND[kind]), {
-          ...fields,
-          status: draft.status,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: actor,
-          updatedBy: actor,
-          ...(becomesPublished ? { publishedAt: serverTimestamp() } : {}),
-        });
-      }
-      return true;
-    } catch (error) {
-      console.error('[AdminContentService] save failed', error);
-      this.actionError.set(this.describeError(error, 'save'));
-      return false;
-    } finally {
-      this.saving.set(false);
-    }
+    await updateDoc(doc(this.firestore, 'announcements', row.id), changes);
   }
 
-  /** Publishes a draft or moves a published entry back to draft. */
-  async setStatus(entry: AdminContentEntry, status: ContentStatus): Promise<boolean> {
-    this.busyId.set(entry.id);
-    this.actionError.set(null);
-
-    try {
-      await updateDoc(doc(this.firestore, COLLECTION_BY_KIND[entry.kind], entry.id), {
-        status,
-        updatedAt: serverTimestamp(),
-        updatedBy: this.actor(),
-        ...(status === 'published' ? { publishedAt: serverTimestamp() } : {}),
-      });
-      return true;
-    } catch (error) {
-      console.error('[AdminContentService] status change failed', error);
-      this.actionError.set(this.describeError(error, 'update'));
-      return false;
-    } finally {
-      this.busyId.set(null);
+  async setAnnouncementPublished(row: AnnouncementRow, isPublished: boolean): Promise<void> {
+    const changes: Record<string, unknown> = { isPublished, updatedAt: serverTimestamp() };
+    if (isPublished && !row.publishAt) {
+      changes['publishAt'] = serverTimestamp();
     }
+    await updateDoc(doc(this.firestore, 'announcements', row.id), changes);
   }
 
-  async remove(entry: AdminContentEntry): Promise<boolean> {
-    this.busyId.set(entry.id);
-    this.actionError.set(null);
-
-    try {
-      await deleteDoc(doc(this.firestore, COLLECTION_BY_KIND[entry.kind], entry.id));
-      return true;
-    } catch (error) {
-      console.error('[AdminContentService] delete failed', error);
-      this.actionError.set(this.describeError(error, 'delete'));
-      return false;
-    } finally {
-      this.busyId.set(null);
-    }
+  async deleteAnnouncement(row: AnnouncementRow): Promise<void> {
+    await deleteDoc(doc(this.firestore, 'announcements', row.id));
   }
 
-  // ---- Helpers ----
+  // ---- FAQs ----
 
-  private toRow(kind: ContentKind, id: string, data: DocumentData): Row {
-    const isFaq = kind === 'faq';
-    const title = String(
-      (isFaq ? data['question'] ?? data['title'] : data['title'] ?? data['question']) ?? 'Untitled',
-    );
-    const body = String((isFaq ? data['answer'] ?? data['body'] : data['body'] ?? data['message']) ?? '');
-    // Content without a status (older documents) counts as published.
-    const isDraft = data['status'] === 'draft' || data['published'] === false;
-    const changed = data['updatedAt'] ?? data['createdAt'];
+  async createFaq(input: FaqInput): Promise<void> {
+    await addDoc(collection(this.firestore, 'faqs'), {
+      ...this.faqFields(input),
+      createdBy: this.auth.currentUser?.uid ?? null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 
-    return {
-      entry: {
-        id,
-        kind,
-        kindLabel: isFaq ? 'FAQ' : 'Announcement',
-        title,
-        body,
-        preview: body.length > PREVIEW_LENGTH ? `${body.slice(0, PREVIEW_LENGTH).trimEnd()}…` : body,
-        status: isDraft ? 'draft' : 'published',
-        statusLabel: isDraft ? 'Draft' : 'Published',
-        updated: this.formatDate(changed),
-        updatedBy: String(data['updatedBy'] ?? data['createdBy'] ?? 'Unknown'),
+  async updateFaq(row: FaqRow, input: FaqInput): Promise<void> {
+    await updateDoc(doc(this.firestore, 'faqs', row.id), {
+      ...this.faqFields(input),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async setFaqPublished(row: FaqRow, isPublished: boolean): Promise<void> {
+    await updateDoc(doc(this.firestore, 'faqs', row.id), { isPublished, updatedAt: serverTimestamp() });
+  }
+
+  async deleteFaq(row: FaqRow): Promise<void> {
+    await deleteDoc(doc(this.firestore, 'faqs', row.id));
+  }
+
+  // ---- Internals ----
+
+  private listen(
+    name: string,
+    apply: (docs: Array<{ id: string; data: DocumentData }>) => void,
+  ): Unsubscribe {
+    return onSnapshot(
+      collection(this.firestore, name),
+      snap => {
+        apply(snap.docs.map(document => ({ id: document.id, data: document.data() })));
+        this.failures.delete(name);
+        this.loaded.add(name);
+        this.publishState();
       },
-      time: this.toMillis(changed),
+      error => {
+        console.error(`[AdminContentService] could not read "${name}"`, error);
+        this.failures.set(name, error.code);
+        this.loaded.add(name);
+        this.publishState();
+      },
+    );
+  }
+
+  private publishState(): void {
+    this.error.set(
+      this.failures.size
+        ? `Could not read: ${[...this.failures.entries()].map(([name, code]) => `${name} (${code})`).join(', ')}`
+        : null,
+    );
+    if (this.loaded.size >= 2) {
+      this.loading.set(false);
+    }
+  }
+
+  private faqFields(input: FaqInput): Record<string, unknown> {
+    const hasContact = input.contactAuthority || input.contactEmail || input.contactPhone;
+    return {
+      question: input.question,
+      answer: input.answer,
+      category: input.category,
+      order: input.order,
+      isPublished: input.isPublished,
+      contact: hasContact
+        ? { authority: input.contactAuthority, email: input.contactEmail, phone: input.contactPhone }
+        : null,
     };
   }
 
-  private actor(): string {
-    return this.auth?.currentUser?.email ?? this.auth?.currentUser?.uid ?? 'Unknown';
+  private toAnnouncement(id: string, data: DocumentData): AnnouncementRow {
+    return {
+      id,
+      title: (data['title'] ?? 'Untitled announcement') as string,
+      body: (data['body'] ?? '') as string,
+      isPublished: data['isPublished'] === true,
+      publishAt: this.toDate(data['publishAt']),
+      updatedAt: this.toDate(data['updatedAt'] ?? data['createdAt']),
+    };
   }
 
-  private toMillis(value: unknown): number {
-    const withToDate = value as { toDate?: () => Date } | null;
-    // A timestamp that is still being confirmed by the server is null: treat it as newest.
-    return withToDate && typeof withToDate.toDate === 'function' ? withToDate.toDate().getTime() : Date.now();
+  private toFaq(id: string, data: DocumentData): FaqRow {
+    const contact = (data['contact'] ?? {}) as Record<string, unknown>;
+    const order = Number(data['order']);
+    return {
+      id,
+      question: (data['question'] ?? 'Untitled question') as string,
+      answer: (data['answer'] ?? '') as string,
+      category: (data['category'] ?? 'General') as string,
+      order: Number.isFinite(order) ? order : 0,
+      isPublished: data['isPublished'] !== false,
+      contactAuthority: (contact['authority'] ?? '') as string,
+      contactEmail: (contact['email'] ?? '') as string,
+      contactPhone: (contact['phone'] ?? '') as string,
+      updatedAt: this.toDate(data['updatedAt'] ?? data['createdAt']),
+    };
   }
 
-  private formatDate(value: unknown): string {
-    const withToDate = value as { toDate?: () => Date } | null;
-    if (!withToDate || typeof withToDate.toDate !== 'function') {
-      return 'just now';
+  private time(date: Date | null): number {
+    return date ? date.getTime() : 0;
+  }
+
+  private toDate(value: unknown): Date | null {
+    if (!value) {
+      return null;
     }
-    return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(
-      withToDate.toDate(),
-    );
-  }
-
-  private describeError(error: unknown, action: string): string {
-    const code = (error as { code?: string } | null)?.code ?? '';
-    if (code === 'permission-denied') {
-      return `You do not have permission to ${action} content.`;
+    if (value instanceof Date) {
+      return value;
     }
-    return `Could not ${action} the content${code ? ` (${code})` : ''}.`;
+    const withToDate = value as { toDate?: () => Date };
+    if (typeof withToDate.toDate === 'function') {
+      return withToDate.toDate();
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
   }
 }

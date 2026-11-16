@@ -3,14 +3,110 @@
   <h2>Ideas</h2>
   <p>Review submissions, assign evaluators, and manage workflow progress.</p>
 
-  <div class="idea-list">
-    <article class="idea-card" *ngFor="let idea of ideaPipeline">
-      <div class="title-row">
-        <strong>{{ idea.title }}</strong>
-        <span class="score">{{ idea.score }}</span>
-      </div>
-      <div class="meta">Owner: {{ idea.owner }}</div>
-      <div class="stage">Stage: {{ idea.stage }}</div>
-    </article>
+  @if (error()) {
+    <p class="empty-state" role="alert">{{ error() }}</p>
+  }
+
+  <div class="idea-counts" aria-label="Idea summary">
+    <span class="count-chip"><strong>{{ counts().total }}</strong> Total</span>
+    <span class="count-chip"><strong>{{ counts().submitted }}</strong> Submitted</span>
+    <span class="count-chip"><strong>{{ counts().underReview }}</strong> Under review</span>
+    <span class="count-chip"><strong>{{ counts().approved }}</strong> Approved</span>
+    <span class="count-chip"><strong>{{ counts().awarded }}</strong> Awarded</span>
   </div>
+
+  <div class="toolbar">
+    <label class="search-field">
+      <span class="sr-only">Search ideas</span>
+      <input
+        type="search"
+        placeholder="Search by title, owner or category"
+        [value]="search()"
+        (input)="onSearch($event)"
+      />
+    </label>
+
+    <select class="filter-select" aria-label="Filter by status" [value]="statusFilter()" (change)="onStatusFilter($event)">
+      <option value="all">All statuses</option>
+      @for (option of statusOptions; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </select>
+  </div>
+
+  @if (loading()) {
+    <app-idea-loader label="Loading ideas" />
+  } @else {
+    <div class="idea-list">
+      @for (idea of filteredIdeas(); track idea.id) {
+        <article class="idea-card">
+          <div class="title-row">
+            <strong>{{ idea.title }}</strong>
+            <span class="score" title="Score">{{ formatScore(idea.score) }}</span>
+          </div>
+
+          <div class="meta">Owner: {{ idea.ownerName }}</div>
+          @if (idea.category) {
+            <div class="meta">Category: {{ idea.category }}</div>
+          }
+          <div class="stage">Stage: {{ stageLabel(idea) }}</div>
+          <div class="meta">Submitted: {{ formatDate(idea.submittedAt) }}</div>
+
+          <div class="status-row">
+            <span class="tag" [class]="'tag ' + statusClass(idea.status)">{{ statusLabel(idea.status) }}</span>
+          </div>
+
+          <div class="assigned" aria-label="Assigned evaluators">
+            @for (assignment of assignmentsFor(idea); track assignment.id) {
+              <span class="assignee-chip">
+                {{ evaluatorName(assignment.evaluatorUid) }}
+                <small>({{ assignment.status }})</small>
+                @if (assignment.status !== 'done') {
+                  <button
+                    type="button"
+                    class="chip-remove"
+                    [attr.aria-label]="'Remove ' + evaluatorName(assignment.evaluatorUid)"
+                    (click)="onRemoveAssignment(assignment)"
+                  >
+                    &times;
+                  </button>
+                }
+              </span>
+            } @empty {
+              <span class="sub-text">No evaluators assigned yet.</span>
+            }
+          </div>
+
+          <div class="card-actions">
+            <label>
+              <span class="sr-only">Change status of {{ idea.title }}</span>
+              <select class="row-select" (change)="onStatusChange($event, idea)">
+                @for (option of statusOptions; track option.value) {
+                  <option [value]="option.value" [selected]="option.value === idea.status">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span class="sr-only">Assign an evaluator to {{ idea.title }}</span>
+              <select class="row-select" (change)="onAssign($event, idea)">
+                <option value="">Assign evaluator…</option>
+                @for (evaluator of evaluators(); track evaluator.id) {
+                  <option [value]="evaluator.id">{{ evaluator.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </article>
+      } @empty {
+        <p class="empty-state">
+          @if (counts().total === 0) {
+            No ideas yet. Ideas appear here as soon as users create them.
+          } @else {
+            No ideas match the current filters.
+          }
+        </p>
+      }
+    </div>
+  }
 </section>

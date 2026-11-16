@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Auth, User } from '@angular/fire/auth';
+import { Firestore } from '@angular/fire/firestore';
 import { provideRouter, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,6 +54,7 @@ describe('App', () => {
           { path: 'account/user/change-password', component: AccountRouteStubComponent },
         ]),
         { provide: Auth, useValue: {} },
+        { provide: Firestore, useValue: {} },
         { provide: AuthService, useValue: authService },
         { provide: ToastService, useValue: toastService },
       ],
