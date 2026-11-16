@@ -265,7 +265,7 @@ export class IdeaComponent {
       this.submitted = true;
       this.drafts.clear(authUser.uid);
       this.toast.success('Your idea was submitted.');
-      await this.router.navigate(['/dashboard']);
+      await this.router.navigate(['/tracking/status']);
     } catch (error) {
       console.error('Idea submission failed', error);
       this.toast.error('We could not submit your idea. Your answers are saved, please try again.');

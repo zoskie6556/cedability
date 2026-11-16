@@ -202,6 +202,6 @@ describe('IdeaComponent', () => {
       toNewIdea(expectedForm, authenticatedUser.uid, 'Casey Example'),
     );
     expect(toastService.success).toHaveBeenCalledWith('Your idea was submitted.');
-    expect(router.navigate).toHaveBeenCalledWith(['/dashboard']);
+    expect(router.navigate).toHaveBeenCalledWith(['/tracking/status']);
   });
 });

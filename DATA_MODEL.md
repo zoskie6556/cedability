@@ -6,8 +6,7 @@ The single reference for **where every record lives**. If you need data and it i
 
 ```
 users/{uid}
-  ├── notifications/{notificationId}
-  └── ideas/{ideaId}
+  └── notifications/{notificationId}
 
 ideas/{ideaId}
   ├── versions/{versionId}          # snapshot on every (re)submission
@@ -34,9 +33,7 @@ settings/{docId}                    # app config, e.g. settings/chat
 
 **There is no `users/{uid}/ideas`.** An idea belongs to a user through the `ownerId` field, so "my ideas" is one query, and an idea is stored once and never duplicated:
 
-```ts
-query(collection(db, 'ideas'), where('ownerId', '==', uid), orderBy('updatedAt', 'desc'))
-```
+The tracking view listens to `ideas` with `where('ownerId', '==', uid)` and sorts the results by `updatedAt` (falling back to `createdAt`) in the client. This uses the automatic single-field index and does not require a composite index.
 
 ## 2. Roles
 

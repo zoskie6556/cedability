@@ -7,6 +7,7 @@ import {
   Firestore,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -153,9 +154,35 @@ export class UserDataService {
     const userIdeasQuery = query(ideaCollection, where('ownerId', '==', uid));
     const snapshot = await getDocs(userIdeasQuery);
 
-    return snapshot.docs
-      .map((ideaDocument) => this.parseIdea(ideaDocument.id, ideaDocument.data()))
-      .sort((first, second) => (second.createdAt?.toMillis() ?? 0) - (first.createdAt?.toMillis() ?? 0));
+    return this.sortIdeasByLatestUpdate(
+      snapshot.docs.map((ideaDocument) => this.parseIdea(ideaDocument.id, ideaDocument.data())),
+    );
+  }
+
+  watchIdeasForUser(
+    uid: string,
+    onIdeas: (ideas: Idea[]) => void,
+    onError: (error: unknown) => void,
+  ): () => void {
+    const userIdeasQuery = query(collection(this.firestore, 'ideas'), where('ownerId', '==', uid));
+
+    return onSnapshot(
+      userIdeasQuery,
+      (snapshot) => {
+        try {
+          onIdeas(
+            this.sortIdeasByLatestUpdate(
+              snapshot.docs.map((ideaDocument) =>
+                this.parseIdea(ideaDocument.id, ideaDocument.data()),
+              ),
+            ),
+          );
+        } catch (error: unknown) {
+          onError(error);
+        }
+      },
+      onError,
+    );
   }
 
   async getIdeasForEvaluator(): Promise<Idea[]> {
@@ -164,6 +191,14 @@ export class UserDataService {
     return snapshot.docs
       .map((ideaDocument) => this.parseIdea(ideaDocument.id, ideaDocument.data()))
       .sort((first, second) => (second.createdAt?.toMillis() ?? 0) - (first.createdAt?.toMillis() ?? 0));
+  }
+
+  private sortIdeasByLatestUpdate(ideas: Idea[]): Idea[] {
+    return ideas.sort((first, second) => {
+      const firstUpdatedAt = first.updatedAt?.toMillis() ?? first.createdAt?.toMillis() ?? 0;
+      const secondUpdatedAt = second.updatedAt?.toMillis() ?? second.createdAt?.toMillis() ?? 0;
+      return secondUpdatedAt - firstUpdatedAt;
+    });
   }
 
   async getIdeaById(ideaId: string): Promise<Idea | null> {

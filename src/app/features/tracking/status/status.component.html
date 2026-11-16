@@ -1,1 +1,95 @@
-<p>status works!</p>
+<main id="main-content" class="tracking-page" aria-labelledby="tracking-title">
+  <header class="tracking-header">
+    <p class="eyebrow">Your submissions</p>
+    <h1 id="tracking-title">Track your ideas</h1>
+    <p>See where each submission is in the review process and what happens next.</p>
+  </header>
+
+  @if (isLoading()) {
+    <app-idea-loader label="Loading your submissions" />
+  } @else if (loadError(); as error) {
+    <section class="tracking-message" aria-labelledby="tracking-error-title">
+      <h2 id="tracking-error-title">Submissions could not be loaded</h2>
+      <p role="alert">{{ error }}</p>
+      <button class="tracking-button" type="button" (click)="loadSubmissions()">Try again</button>
+    </section>
+  } @else if (!hasSignedInUser()) {
+    <section class="tracking-message" aria-labelledby="tracking-sign-in-title">
+      <h2 id="tracking-sign-in-title">Sign in to track your ideas</h2>
+      <p>Your submissions will appear here after you sign in.</p>
+      <a class="tracking-button" routerLink="/account/user/login">Sign in</a>
+    </section>
+  } @else if (ideas().length === 0) {
+    <section class="tracking-message" aria-labelledby="tracking-empty-title">
+      <h2 id="tracking-empty-title">No submissions yet</h2>
+      <p>When you submit an idea, its current review stage will appear here.</p>
+      <a class="tracking-button" routerLink="/submissions/idea">Submit an idea</a>
+    </section>
+  } @else {
+    <p class="results-count" role="status" aria-live="polite">
+      {{ ideas().length }} {{ ideas().length === 1 ? 'submission' : 'submissions' }}
+    </p>
+
+    <div class="submission-list">
+      @for (idea of ideas(); track idea.id) {
+        @let stage = stages[idea.status];
+        <article class="submission-card" [attr.aria-labelledby]="'idea-title-' + idea.id">
+          <div class="submission-heading">
+            <div>
+              <h2 [id]="'idea-title-' + idea.id">{{ idea.title }}</h2>
+              @if (idea.createdAt; as createdAt) {
+                <p class="submitted-date">
+                  Submitted
+                  <time [attr.datetime]="createdAt.toDate().toISOString()">
+                    {{ createdAt.toDate() | date: 'mediumDate' }}
+                  </time>
+                </p>
+              }
+            </div>
+            <span
+              class="stage-badge"
+              [class.stage-health-green]="stage.health === 'green'"
+              [class.stage-health-yellow]="stage.health === 'yellow'"
+              [class.stage-health-red]="stage.health === 'red'"
+            >
+              {{ stage.label }}
+            </span>
+          </div>
+
+          <section class="stage-details" [attr.aria-labelledby]="'stage-title-' + idea.id">
+            <h3 [id]="'stage-title-' + idea.id">Current stage: {{ stage.label }}</h3>
+            <p>{{ stage.help }}</p>
+            <p class="stage-health">
+              <span
+                class="health-indicator"
+                [class.health-indicator-green]="stage.health === 'green'"
+                [class.health-indicator-yellow]="stage.health === 'yellow'"
+                [class.health-indicator-red]="stage.health === 'red'"
+                aria-hidden="true"
+              ></span>
+              Stage health: {{ healthLabels[stage.health] }}
+            </p>
+          </section>
+
+          @if (stage.progress !== null) {
+            <div class="progress-section">
+              <div class="progress-labels">
+                <span>Overall progress</span>
+                <strong>{{ stage.progress }}%</strong>
+              </div>
+              <progress
+                max="100"
+                [value]="stage.progress"
+                [attr.aria-label]="'Overall progress for ' + idea.title"
+              >
+                {{ stage.progress }}%
+              </progress>
+            </div>
+          } @else {
+            <p class="closed-notice">This submission is closed.</p>
+          }
+        </article>
+      }
+    </div>
+  }
+</main>
