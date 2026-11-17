@@ -106,7 +106,7 @@ describe('AuthService', () => {
     authService = TestBed.inject(AuthService);
   });
 
-  it('writes the registered user details to users/{uid}', async () => {
+  it('creates a complete user record and updates the auth profile', async () => {
     await authService.register('Casey Example', 'casey@example.com', 'password123');
 
     expect(doc).toHaveBeenCalledWith(expect.anything(), 'users', 'user-123');
@@ -142,7 +142,7 @@ describe('AuthService', () => {
     expect(updateProfile).toHaveBeenCalledWith(user, { displayName: 'Casey Example' });
   });
 
-  it('reports a distinct error when the Firestore write fails after Auth registration', async () => {
+  it('reports a distinct error when creating the user record fails after Auth registration', async () => {
     const writeError = new Error('Firestore unavailable');
     vi.mocked(setDoc).mockRejectedValue(writeError);
 
