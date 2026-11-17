@@ -45,7 +45,7 @@ export const routes: Routes = [
   },
   {
     path: 'evaluation',
-    canActivate: [roleGuard('evaluator')],
+    canActivate: [roleGuard(['evaluator', 'adjudicator', 'admin'])],
     loadChildren: () => import('./features/evaluation/evaluation.routes').then(m => m.EVALUATION_ROUTES),
   },
   {

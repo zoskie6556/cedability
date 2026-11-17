@@ -29,6 +29,7 @@ describe('dashboardRedirectGuard', () => {
   it.each([
     ['user', '/account/user/dashboard'],
     ['evaluator', '/evaluation/review'],
+    ['adjudicator', '/evaluation/adjudication'],
     ['admin', '/admin/admin-dashboard'],
   ] as const)('routes the %s role to its dashboard', async (role, expectedPath) => {
     roleService.loadCurrentRole.mockResolvedValue({ status: 'assigned', role });

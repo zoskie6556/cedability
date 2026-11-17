@@ -43,6 +43,11 @@ export class AdminDashboardComponent {
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 5 9.5l-1.2 1.4a4 4 0 0 0-.8 2.1V17H9v-1c0-.8-.3-1.6-.8-2.1L7 12.5A6 6 0 0 1 12 3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     },
     {
+      label: 'Adjudication',
+      path: '/evaluation/adjudication',
+      icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 12 4 4L19 6M4 20h16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    },
+    {
       label: 'Stages',
       path: '/admin/stages',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17h16M7 7h10M7 12h10M7 4v16M17 4v16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',

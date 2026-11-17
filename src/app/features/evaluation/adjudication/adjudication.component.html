@@ -1,0 +1,237 @@
+<main class="adjudication-page">
+  <header class="page-header">
+    <p class="eyebrow">Evaluation</p>
+    <h1>Adjudication</h1>
+    <p>
+      Review evaluator scores, panel spread, and normalized rankings before recording a decision.
+    </p>
+  </header>
+
+  @if (isLoading() || isSaving() || isAwarding()) {
+    <app-idea-loader
+      [label]="
+        isLoading()
+          ? 'Loading adjudication worklist'
+          : isAwarding()
+            ? 'Creating award'
+            : 'Recording adjudication decision'
+      "
+    />
+  } @else if (loadError()) {
+    <section class="status-panel error-panel" role="alert">
+      <p>{{ loadError() }}</p>
+      <button type="button" class="button secondary" (click)="loadDashboard()">Try again</button>
+    </section>
+  } @else {
+    <section class="worklist-section" aria-labelledby="worklist-heading">
+      <div class="section-heading">
+        <div>
+          <h2 id="worklist-heading">Ideas awaiting adjudication</h2>
+          <p>
+            Ranked by the mean normalized evaluator score. Raw totals and panel spread remain
+            visible.
+          </p>
+        </div>
+        <span class="count-badge">{{ ideas().length }} ideas</span>
+      </div>
+
+      @if (ideas().length === 0) {
+        <p class="status-panel">There are no ideas awaiting adjudication.</p>
+      } @else {
+        <ol class="idea-list">
+          @for (idea of ideas(); track idea.ideaId; let rank = $index) {
+            <li class="idea-card">
+              <article>
+                <div class="idea-heading">
+                  <span class="rank" aria-label="Rank {{ rank + 1 }}">#{{ rank + 1 }}</span>
+                  <div class="idea-title">
+                    <h3>{{ idea.title }}</h3>
+                    <p>{{ idea.category ?? 'Uncategorized' }}</p>
+                  </div>
+                  <div class="ranking-score">
+                    <span>Normalized rank score</span>
+                    <strong>{{ formatScore(idea.normalizedScore) }}</strong>
+                  </div>
+                </div>
+
+                <dl class="panel-summary">
+                  <div>
+                    <dt>Panel mean</dt>
+                    <dd>{{ formatScore(idea.panel.mean) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Score spread</dt>
+                    <dd>{{ idea.panel.spread }}</dd>
+                  </div>
+                  <div>
+                    <dt>Evaluations</dt>
+                    <dd>{{ idea.panel.count }}</dd>
+                  </div>
+                </dl>
+
+                @if (idea.panel.needsAdjudication) {
+                  <p class="adjudication-flag" role="status">
+                    Needs adjudication: evaluator scores have a wide spread.
+                  </p>
+                }
+
+                @if (idea.normalizedScores.length > 0) {
+                  <div class="table-wrap">
+                    <table>
+                      <caption class="visually-hidden">
+                        Evaluator totals and normalized scores for
+                        {{
+                          idea.title
+                        }}
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Evaluator</th>
+                          <th scope="col">Stage</th>
+                          <th scope="col">Total</th>
+                          <th scope="col">Normalized score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (
+                          score of idea.normalizedScores;
+                          track score.stageId + score.evaluatorUid;
+                          let scoreIndex = $index
+                        ) {
+                          <tr>
+                            <th scope="row">Evaluator {{ scoreIndex + 1 }}</th>
+                            <td>{{ score.stageId }}</td>
+                            <td>{{ score.total }}</td>
+                            <td>{{ formatScore(score.zScore) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="empty-scores">No evaluator scores have been submitted.</p>
+                }
+
+                <button
+                  type="button"
+                  class="button primary"
+                  [attr.aria-expanded]="activeIdeaId() === idea.ideaId"
+                  (click)="selectIdea(idea.ideaId)"
+                >
+                  {{ activeIdeaId() === idea.ideaId ? 'Close decision form' : 'Record decision' }}
+                </button>
+
+                @if (activeIdeaId() === idea.ideaId) {
+                  <form
+                    class="decision-form"
+                    [formGroup]="decisionForm"
+                    (ngSubmit)="recordDecision(idea)"
+                  >
+                    <h4>Decision for {{ idea.title }}</h4>
+                    <label for="decision">Decision</label>
+                    <select id="decision" formControlName="decision">
+                      <option value="advance">Advance — approve idea</option>
+                      <option value="revise">Revise — request changes</option>
+                      <option value="reject">Reject</option>
+                    </select>
+
+                    <label for="decision-note"
+                      >Written note <span>(required, up to 500 characters)</span></label
+                    >
+                    <textarea
+                      id="decision-note"
+                      formControlName="note"
+                      rows="4"
+                      maxlength="500"
+                      [attr.aria-invalid]="
+                        decisionForm.controls.note.touched && decisionForm.controls.note.invalid
+                          ? 'true'
+                          : null
+                      "
+                      [attr.aria-describedby]="
+                        decisionError()
+                          ? 'decision-note-count decision-error'
+                          : 'decision-note-count'
+                      "
+                    ></textarea>
+                    <p id="decision-note-count" class="character-count">
+                      {{ decisionForm.controls.note.value.length }}/500 characters
+                    </p>
+                    @if (decisionError()) {
+                      <p id="decision-error" class="field-error" role="alert">
+                        {{ decisionError() }}
+                      </p>
+                    }
+                    <button type="submit" class="button primary">Save decision</button>
+                  </form>
+                }
+              </article>
+            </li>
+          }
+        </ol>
+      }
+    </section>
+
+    @if (isAdmin()) {
+      <section class="award-section" aria-labelledby="award-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="award-heading">Award approved ideas</h2>
+            <p>
+              Only approved ideas can be awarded. Saving an award also moves the idea to awarded.
+            </p>
+          </div>
+          <span class="count-badge">{{ approvedIdeas().length }} approved</span>
+        </div>
+
+        @if (approvedIdeas().length === 0) {
+          <p class="status-panel">There are no approved ideas waiting for an award.</p>
+        } @else {
+          <ul class="award-list">
+            @for (idea of approvedIdeas(); track idea.ideaId) {
+              <li>
+                <div>
+                  <h3>{{ idea.title }}</h3>
+                  <p>{{ idea.category ?? 'Uncategorized' }}</p>
+                </div>
+                <button type="button" class="button secondary" (click)="startAward(idea)">
+                  Create award
+                </button>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (activeAwardIdea(); as idea) {
+          <form class="award-form" [formGroup]="awardForm" (ngSubmit)="createAward()">
+            <h3>Create award for {{ idea.title }}</h3>
+            <label for="award-title">Award title</label>
+            <input id="award-title" formControlName="title" maxlength="120" />
+            <label for="award-type">Award type</label>
+            <input id="award-type" formControlName="type" maxlength="80" />
+            <label for="award-citation">Citation</label>
+            <textarea
+              id="award-citation"
+              formControlName="citation"
+              rows="3"
+              maxlength="2000"
+            ></textarea>
+            <label class="checkbox-label" for="award-public">
+              <input id="award-public" type="checkbox" formControlName="isPublic" />
+              Make this award publicly readable
+            </label>
+            @if (awardError()) {
+              <p class="field-error" role="alert">{{ awardError() }}</p>
+            }
+            <div class="form-actions">
+              <button type="submit" class="button primary">Save award</button>
+              <button type="button" class="button secondary" (click)="activeAwardIdea.set(null)">
+                Cancel
+              </button>
+            </div>
+          </form>
+        }
+      </section>
+    }
+  }
+</main>

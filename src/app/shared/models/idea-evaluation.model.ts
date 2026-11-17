@@ -158,6 +158,39 @@ export interface IdeaQuestion {
   readonly respondedAt: Timestamp | null;
 }
 
+export type AdjudicationDecision = 'advance' | 'reject' | 'revise';
+
+export interface IdeaAdjudication {
+  readonly id: string;
+  readonly ideaId: string;
+  readonly stageId: string;
+  readonly ideaVersion: number;
+  readonly adjudicatorUid: string;
+  readonly decision: AdjudicationDecision;
+  readonly finalScore: number | null;
+  readonly note: string;
+  readonly decidedAt: Timestamp | null;
+}
+
+export interface IdeaAward {
+  readonly id: string;
+  readonly ideaId: string;
+  readonly ownerId: string;
+  readonly title: string;
+  readonly type: string;
+  readonly citation: string;
+  readonly awardedBy: string;
+  readonly awardedAt: Timestamp | null;
+  readonly isPublic: boolean;
+}
+
+export interface AwardCandidate {
+  readonly ideaId: string;
+  readonly ownerId: string;
+  readonly title: string;
+  readonly category: IdeaCategory | null;
+}
+
 function asRecord(value: unknown, fieldName: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`The Firestore ${fieldName} data is not a valid object.`);

@@ -10,6 +10,8 @@ export function roleDashboardPath(role: UserRole): string {
       return '/account/user/dashboard';
     case 'evaluator':
       return '/evaluation/review';
+    case 'adjudicator':
+      return '/evaluation/adjudication';
     case 'admin':
       return '/admin/admin-dashboard';
   }

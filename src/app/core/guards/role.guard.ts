@@ -4,7 +4,7 @@ import { UserRole } from '../models/user-role';
 import { RoleService, UserRoleResult } from '../services/role.service';
 import { roleErrorUrl } from './role-routing';
 
-export function roleGuard(requiredRole: UserRole): CanActivateFn {
+export function roleGuard(requiredRole: UserRole | readonly UserRole[]): CanActivateFn {
   return async (_route, state) => {
     const router = inject(Router);
     let roleResult: UserRoleResult;
@@ -21,7 +21,8 @@ export function roleGuard(requiredRole: UserRole): CanActivateFn {
     }
 
     if (roleResult.status === 'assigned') {
-      return roleResult.role === requiredRole ? true : router.parseUrl('/dashboard');
+      const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+      return allowedRoles.includes(roleResult.role) ? true : router.parseUrl('/dashboard');
     }
 
     return roleErrorUrl(router, roleResult.status);

@@ -12,7 +12,8 @@ ideas/{ideaId}
   ├── versions/{version}            # immutable snapshot of the superseded submission
   ├── statusHistory/{entryId}       # timeline shown to the submitter
   ├── feedback/{feedbackId}         # evaluator feedback + submitter reply
-  ├── evaluations/{evaluatorUid}   # scores (hidden from submitter)
+  ├── evaluations/{stageId_evaluatorUid} # scores (hidden from submitter)
+  ├── adjudications/{stageId}       # decision (Functions write only)
 
 assignments/{assignmentId}          # evaluator worklist
 stages/{stageId}                    # workflow configuration (admin-editable)
@@ -86,7 +87,7 @@ Subcollections:
 - **statusHistory/{entryId}**: `{ from, to, stageId?, byUid, byRole, note?, at }`
 - **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: true, reply: null | { message, at }, createdAt }`. Functions write evaluator feedback and status history atomically; the owner may read it and add one reply. Email delivery is deferred until the team selects an outbound email provider; the in-app notification and tracking view are available meanwhile.
 - **evaluations/{stageId_evaluatorUid}**: `{ stageId, evaluatorUid, scores: { [criterionId]: number }, comments, total, submittedAt }` (submitter cannot read)
-- **adjudications/{stageId}**: `{ stageId, adjudicatorUid, decision: 'advance'|'reject'|'revise', finalScore, note, decidedAt }`
+- **adjudications/{stageId}**: `{ stageId, ideaVersion, adjudicatorUid, decision: 'advance'|'reject'|'revise', finalScore: number|null, note, decidedAt }`. Every decision requires a written note. For the adjudication stage, `finalScore` is the mean of all valid evaluator totals on the idea, or `null` when no evaluations exist. Only the `recordAdjudication` Function may create or update the decision; it writes the decision and status transition atomically. A later submission version may receive a new decision at the same stage; status history and audit logs retain the previous decisions.
 
 `similarityCheck` is `{ status: 'complete'|'failed', comparedIdeas, truncated, matches: [{ ideaId, title, jaccardSimilarity, matchingKeywords }], failureMessage }`. A check compares plan text only, requires at least two shared keywords and a Jaccard similarity of at least `0.15`, and marks scans beyond 500 documents as truncated. Names, emails and owner IDs are never included in the comparison text.
 
@@ -107,7 +108,7 @@ Evaluator worklist: `where('evaluatorUid','==',uid).where('status','!=','done')`
 `type` is one of `text | textarea | select | multiselect | number | date | file`.
 
 ### `awards/{awardId}`
-`{ ideaId, ownerId, title, type, citation, awardedBy, awardedAt, isPublic }`
+`{ ideaId, ownerId, title, type, citation, awardedBy, awardedAt, isPublic }`. Only the admin-only `awardApprovedIdea` Function writes an award, and it atomically moves the approved idea to `awarded`. Admins and the owner may read private awards; any signed-in or unauthenticated reader may read an award marked public.
 
 ### `faqs/{faqId}` / `announcements/{announcementId}`
 - faq: `{ question, answer, category, order, contact?: { authority, email, phone } }`
@@ -167,7 +168,7 @@ Status changes go through a Cloud Function (or a rules-restricted write), which 
 | agentPresence | chat | the agent themselves; admin | everyone signed in |
 | stats | reporting | no | admin, adjudicator |
 | auditLogs | core | no | admin |
-| awards | evaluation | admin | owner; public if `isPublic` |
+| awards | evaluation | no (admin Function) | admin, owner; public if `isPublic` |
 
 ## 6. Storage paths (Firebase Storage)
 

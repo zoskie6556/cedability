@@ -15,6 +15,9 @@
 // criteria and stage data for one external evaluator assignment.
 // ideas/{ideaId}/evaluations/{stageId_evaluatorUid}: validated scores and
 // recommendation; submitters cannot read evaluations.
+// ideas/{ideaId}/adjudications/{stageId}: adjudicator decision; Functions
+// write this document atomically with the idea status transition.
+// awards/{awardId}: server-written recognition, readable by its owner or when public.
 // ideas/{ideaId}/questions/{questionId}: stage-scoped evaluator question and owner response.
 // assignments/{ideaId_stageId_evaluatorUid}: evaluator worklist and submission state.
 // stages/{stageId}, criteriaSets/{criteriaSetId}: admin-managed evaluation configuration.
@@ -35,6 +38,11 @@ service cloud.firestore {
 
     function isAdmin() {
       return request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    function isAdjudicatorOrAdmin() {
+      return request.auth != null
+        && request.auth.token.role in ['adjudicator', 'admin'];
     }
 
     function isUser() {
@@ -1122,6 +1130,11 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /adjudications/{stageId} {
+        allow get, list: if isAdjudicatorOrAdmin();
+        allow create, update, delete: if false;
+      }
+
       match /questions/{questionId} {
         allow get: if signedInAs(parentIdeaOwnerId())
           || isInternalEvaluator()
@@ -1202,6 +1215,13 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /awards/{awardId} {
+      allow get, list: if isAdmin()
+        || (request.auth != null && resource.data.ownerId == request.auth.uid)
+        || resource.data.isPublic == true;
       allow create, update, delete: if false;
     }
 

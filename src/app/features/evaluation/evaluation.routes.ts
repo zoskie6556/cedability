@@ -26,6 +26,16 @@ export const EVALUATION_ROUTES: Routes = [
       ),
   },
   {
+    path: 'adjudication',
+    title: 'Adjudication',
+    canActivate: [roleGuard(['adjudicator', 'admin'])],
+    providers: evaluationProviders,
+    loadComponent: () =>
+      import('./adjudication/adjudication.component').then(
+        (module) => module.AdjudicationComponent,
+      ),
+  },
+  {
     path: ':assignmentId',
     title: 'Evaluate Idea',
     canActivate: [roleGuard('evaluator')],

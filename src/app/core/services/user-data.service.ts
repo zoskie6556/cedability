@@ -33,8 +33,12 @@ import type {
   IdeaQuestion,
   EvaluationRecommendation,
   EvaluatorIdeaView,
+  AdjudicationDecision,
+  AwardCandidate,
 } from '../../shared/models/idea-evaluation.model';
 import { requireIdeaStatus } from '../../shared/models/status-parse';
+import type { RankedAdjudicationIdea } from '../../shared/workflow/adjudication-ranking';
+import { rankAdjudicationIdeas } from '../../shared/workflow/adjudication-ranking';
 import {
   type AutomatedReviewFinding,
   type AutomatedReviewReport,
@@ -356,6 +360,92 @@ export class UserDataService {
     return snapshot.docs.map((evaluation) =>
       parseIdeaEvaluation(ideaId, evaluation.id, evaluation.data()),
     );
+  }
+
+  async getAdjudicationWorklist(adjudicatorUid: string): Promise<RankedAdjudicationIdea[]> {
+    const access = await this.getEvaluatorAccess(adjudicatorUid);
+    if (access.role !== 'adjudicator' && access.role !== 'admin') {
+      throw new Error('Adjudicator access is required to load this worklist.');
+    }
+
+    const ideas = await getDocs(
+      query(collection(this.firestore, 'ideas'), where('status', '==', 'adjudication')),
+    );
+    const candidates = await Promise.all(
+      ideas.docs.map(async (ideaDocument) => {
+        const idea = this.parseIdea(ideaDocument.id, ideaDocument.data());
+        const evaluations = await getDocs(
+          collection(this.firestore, 'ideas', ideaDocument.id, 'evaluations'),
+        );
+        return {
+          ideaId: idea.id,
+          title: idea.title,
+          category: idea.category,
+          evaluations: evaluations.docs.map((evaluation) => {
+            const parsed = parseIdeaEvaluation(idea.id, evaluation.id, evaluation.data());
+            return {
+              evaluatorUid: parsed.evaluatorUid,
+              stageId: parsed.stageId,
+              total: parsed.total,
+            };
+          }),
+        };
+      }),
+    );
+
+    return rankAdjudicationIdeas(candidates);
+  }
+
+  async getApprovedIdeasForAward(adminUid: string): Promise<AwardCandidate[]> {
+    const access = await this.getEvaluatorAccess(adminUid);
+    if (access.role !== 'admin') {
+      throw new Error('Admin access is required to award ideas.');
+    }
+
+    const snapshot = await getDocs(
+      query(collection(this.firestore, 'ideas'), where('status', '==', 'approved')),
+    );
+    return snapshot.docs.map((ideaDocument) => {
+      const idea = this.parseIdea(ideaDocument.id, ideaDocument.data());
+      return {
+        ideaId: idea.id,
+        ownerId: idea.ownerId,
+        title: idea.title,
+        category: idea.category,
+      };
+    });
+  }
+
+  async recordAdjudication(
+    ideaId: string,
+    decision: AdjudicationDecision,
+    note: string,
+  ): Promise<void> {
+    const callable = httpsCallable<
+      { ideaId: string; decision: AdjudicationDecision; note: string },
+      { ideaId: string; status: string }
+    >(this.functions, 'recordAdjudication');
+    await callable({ ideaId, decision, note: note.trim() });
+  }
+
+  async awardIdea(input: {
+    ideaId: string;
+    title: string;
+    type: string;
+    citation: string;
+    isPublic: boolean;
+  }): Promise<void> {
+    const callable = httpsCallable<
+      {
+        ideaId: string;
+        title: string;
+        type: string;
+        citation: string;
+        isPublic: boolean;
+      },
+      { ideaId: string; awardId: string }
+    >(this.functions, 'awardApprovedIdea');
+    await callable(input);
   }
 
   async getQuestionsForIdea(ideaId: string, stageId?: string): Promise<IdeaQuestion[]> {
