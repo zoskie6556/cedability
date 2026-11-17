@@ -104,6 +104,21 @@
   text-transform: capitalize;
 }
 
+.status-chip.idea-status-green {
+  background: #e9f4ed;
+  color: #14532d;
+}
+
+.status-chip.idea-status-yellow {
+  background: #fff0d3;
+  color: #62410a;
+}
+
+.status-chip.idea-status-red {
+  background: #fde8e8;
+  color: #8a1c2d;
+}
+
 .idea-overview,
 .finding-grid {
   display: grid;

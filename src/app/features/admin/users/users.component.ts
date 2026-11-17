@@ -13,7 +13,9 @@ import { collection, Firestore, getCountFromServer, query, where } from '@angula
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminUserService } from '../../../core/services/admin-user.service';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
+import { ToastService } from '../../../core/services/toast.service';
 import { AdminUser, AdminUserRole } from '../models/admin-user.model';
+import type { EvaluatorType } from '../../../shared/models/idea-evaluation.model';
 
 export type UserRole = AdminUserRole;
 export type UserStatus = 'active' | 'disabled';
@@ -37,7 +39,6 @@ export const DEFAULT_STAFF_PASSWORD = 'AdminOps@Ability';
 
 @Component({
   selector: 'app-admin-users',
-  standalone: true,
   imports: [CommonModule, ReactiveFormsModule, IdeaLoaderComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss',
@@ -47,14 +48,16 @@ export class UsersComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly adminUserService = inject(AdminUserService);
   private readonly firestore = inject(Firestore);
+  private readonly toastService = inject(ToastService);
 
   readonly users = signal<AdminUser[]>([]);
   readonly isLoading = signal<boolean>(false);
   readonly isSubmitting = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
   readonly searchTerm = signal<string>('');
-  readonly roleFilter = signal<string>('all');
+  readonly roleFilter = signal<'all' | AdminUserRole>('all');
   readonly creatingUser = signal<boolean>(false);
+  readonly createEvaluatorFieldsVisible = signal(false);
 
   readonly pageSize = 10;
   readonly currentPage = signal<number>(1);
@@ -72,9 +75,11 @@ export class UsersComponent implements OnInit {
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
     email: ['', [Validators.required, Validators.email]],
-    phone: [''],
-    role: ['submitter' as UserRole, [Validators.required]],
+    phone: ['', Validators.pattern(/^(?:\+[1-9]\d{1,14})?$/)],
+    role: ['submitter' as AdminUserRole, Validators.required],
     defaultPassword: [''],
+    evaluatorType: ['internal' as EvaluatorType],
+    organization: [''],
   });
 
   readonly editUserForm = this.fb.nonNullable.group({
@@ -111,7 +116,7 @@ export class UsersComponent implements OnInit {
   });
 
   readonly totalPages = computed(() =>
-    Math.max(1, Math.ceil(this.filteredUsers().length / this.pageSize))
+    Math.max(1, Math.ceil(this.filteredUsers().length / this.pageSize)),
   );
 
   readonly paginatedUsers = computed(() => {
@@ -188,6 +193,7 @@ export class UsersComponent implements OnInit {
     } catch (error) {
       console.error('[UsersComponent] failed to load users', error);
       this.errorMessage.set('Failed to load users. Please try again.');
+      this.toastService.error('The user directory could not be loaded.');
     } finally {
       this.isLoading.set(false);
     }
@@ -231,11 +237,16 @@ export class UsersComponent implements OnInit {
 
   onRoleFilterChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
-    this.roleFilter.set(value);
+    this.roleFilter.set(value === 'all' ? 'all' : (value as AdminUserRole));
     this.currentPage.set(1);
   }
 
-  formatRole(role: string): string {
+  onCreateRoleChange(event: Event): void {
+    const target = event.target as HTMLSelectElement | null;
+    this.createEvaluatorFieldsVisible.set(target?.value === 'evaluator');
+  }
+
+  formatRole(role: AdminUserRole): string {
     switch (role) {
       case 'submitter':
         return 'User';
@@ -264,7 +275,10 @@ export class UsersComponent implements OnInit {
       phone: '',
       role: 'submitter',
       defaultPassword: '',
+      evaluatorType: 'internal',
+      organization: '',
     });
+    this.createEvaluatorFieldsVisible.set(false);
     this.isCreateModalOpen.set(true);
   }
 
@@ -362,9 +376,11 @@ export class UsersComponent implements OnInit {
       );
 
       this.isEditingUser.set(false);
+      this.toastService.success('User information was updated.');
     } catch (error) {
       console.error('[UsersComponent] failed to update user info', error);
       this.errorMessage.set('Failed to update user information.');
+      this.toastService.error('Failed to update user information.');
     } finally {
       this.isSubmitting.set(false);
     }
@@ -383,6 +399,12 @@ export class UsersComponent implements OnInit {
     const isNonUserRole = raw.role !== 'submitter';
     const resolvedPassword =
       raw.defaultPassword.trim() || (isNonUserRole ? DEFAULT_STAFF_PASSWORD : '');
+    if (raw.role === 'evaluator' && raw.evaluatorType === 'external' && !raw.organization.trim()) {
+      this.form.controls.organization.markAsTouched();
+      this.errorMessage.set('Enter the external evaluator organization.');
+      this.toastService.error('Enter the external evaluator organization.');
+      return;
+    }
 
     this.creatingUser.set(true);
     this.errorMessage.set(null);
@@ -394,13 +416,28 @@ export class UsersComponent implements OnInit {
         password: resolvedPassword,
         ...(trimmedPhone ? { phone: trimmedPhone } : {}),
         role: raw.role,
+        evaluatorType: raw.role === 'evaluator' ? raw.evaluatorType : undefined,
+        organization:
+          raw.role === 'evaluator' ? raw.organization.trim() || undefined : undefined,
       });
 
       await this.loadUsers();
       this.closeCreateModal();
+      this.form.reset({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'submitter',
+        defaultPassword: '',
+        evaluatorType: 'internal',
+        organization: '',
+      });
+      this.createEvaluatorFieldsVisible.set(false);
+      this.toastService.success(`Created account for ${trimmedEmail}.`);
     } catch (error) {
       console.error('[UsersComponent] failed to create user', error);
       this.errorMessage.set('Could not create user. Please check the details and try again.');
+      this.toastService.error('Could not create user. Please check the details and try again.');
     } finally {
       this.creatingUser.set(false);
     }
@@ -423,12 +460,14 @@ export class UsersComponent implements OnInit {
 
     try {
       await this.adminUserService.updateRole(user.id, nextRole);
+      this.toastService.success(`Updated ${user.name} to ${this.formatRole(nextRole)}.`);
     } catch (error) {
       console.error('[UsersComponent] failed to update role', error);
       this.users.update((list) =>
         list.map((item) => (item.id === user.id ? { ...item, role: previousRole } : item))
       );
       this.errorMessage.set('Failed to update user role.');
+      this.toastService.error('Failed to update user role.');
     }
   }
 
@@ -443,12 +482,16 @@ export class UsersComponent implements OnInit {
 
     try {
       await this.adminUserService.toggleStatus(user.id, nextIsActive);
+      this.toastService.success(
+        `User ${user.name} is now ${nextStatus}.`,
+      );
     } catch (error) {
       console.error('[UsersComponent] failed to toggle status', error);
       this.users.update((list) =>
         list.map((item) => (item.id === user.id ? { ...item, status: previousStatus } : item))
       );
       this.errorMessage.set('Failed to update user status.');
+      this.toastService.error('Failed to update user status.');
     }
   }
 
@@ -457,9 +500,11 @@ export class UsersComponent implements OnInit {
 
     try {
       await this.adminUserService.resendInvite(user.id);
+      this.toastService.success(`Invite email sent to ${user.email}.`);
     } catch (error) {
       console.error('[UsersComponent] failed to resend invite', error);
       this.errorMessage.set('Failed to resend invite.');
+      this.toastService.error('Failed to resend invite.');
     }
   }
 
@@ -469,6 +514,7 @@ export class UsersComponent implements OnInit {
     try {
       await this.adminUserService.deleteUser(user.id);
       this.users.update((list) => list.filter((item) => item.id !== user.id));
+      this.toastService.success(`Deleted ${user.name}.`);
 
       if (this.selectedUserId() === user.id) {
         this.closeUserModal();
@@ -479,6 +525,7 @@ export class UsersComponent implements OnInit {
     } catch (error) {
       console.error('[UsersComponent] failed to delete user', error);
       this.errorMessage.set('Failed to delete user.');
+      this.toastService.error('Failed to delete user.');
     }
   }
 

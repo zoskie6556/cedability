@@ -1,41 +1,28 @@
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { Auth } from '@angular/fire/auth';
+import { Functions, httpsCallable } from '@angular/fire/functions';
 import {
   collection,
-  deleteDoc,
   doc,
   Firestore,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
   where,
   writeBatch,
   type DocumentData,
   type Unsubscribe,
 } from '@angular/fire/firestore';
-
-export type IdeaStatus =
-  | 'draft'
-  | 'submitted'
-  | 'under_review'
-  | 'feedback_requested'
-  | 'revised'
-  | 'approved'
-  | 'rejected'
-  | 'awarded';
-
-export const IDEA_STATUSES: ReadonlyArray<{ value: IdeaStatus; label: string }> = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'under_review', label: 'Under review' },
-  { value: 'feedback_requested', label: 'Feedback requested' },
-  { value: 'revised', label: 'Revised' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'awarded', label: 'Awarded' },
-];
+import { parseEvaluationCriteriaSet } from '../../shared/models/idea-evaluation.model';
+import type {
+  EvaluatorType,
+  EvaluatorIdeaView,
+} from '../../shared/models/idea-evaluation.model';
+import { UserDataService } from './user-data.service';
+import type { IdeaStatus } from '../../shared/workflow/idea-workflow';
+import { requireIdeaStatus } from '../../shared/models/status-parse';
 
 export interface AdminIdeaRow {
   id: string;
@@ -51,9 +38,11 @@ export interface AdminIdeaRow {
 export interface EvaluatorOption {
   id: string;
   name: string;
+  evaluatorType: EvaluatorType;
+  organization: string | null;
 }
 
-export interface IdeaAssignment {
+export interface AdminIdeaAssignment {
   id: string;
   ideaId: string;
   evaluatorUid: string;
@@ -63,10 +52,12 @@ export interface IdeaAssignment {
 @Injectable({ providedIn: 'root' })
 export class AdminIdeaService {
   private readonly firestore = inject(Firestore);
+  private readonly functions = inject(Functions);
   private readonly auth = inject(Auth);
+  private readonly userDataService = inject(UserDataService);
 
   readonly ideas = signal<AdminIdeaRow[]>([]);
-  readonly assignments = signal<IdeaAssignment[]>([]);
+  readonly assignments = signal<AdminIdeaAssignment[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
@@ -129,7 +120,14 @@ export class AdminIdeaService {
     return snap.docs
       .map(document => {
         const data = document.data();
-        return { id: document.id, name: (data['displayName'] ?? data['name'] ?? data['email'] ?? 'Unnamed') as string };
+        const evaluatorType: EvaluatorType =
+          data['evaluatorType'] === 'external' ? 'external' : 'internal';
+        return {
+          id: document.id,
+          name: (data['displayName'] ?? data['fullName'] ?? data['email'] ?? 'Unnamed') as string,
+          evaluatorType,
+          organization: typeof data['organization'] === 'string' ? data['organization'] : null,
+        };
       })
       .sort((left, right) => left.name.localeCompare(right.name));
   }
@@ -145,38 +143,107 @@ export class AdminIdeaService {
   }
 
   async assignEvaluator(idea: AdminIdeaRow, evaluator: EvaluatorOption): Promise<void> {
-    // A fixed document ID means the same evaluator can never be assigned twice to the same idea and stage.
-    const assignmentId = `${idea.id}_${idea.stageId ?? 'stage'}_${evaluator.id}`;
-    await setDoc(doc(this.firestore, 'assignments', assignmentId), {
+    if (!idea.stageId) {
+      throw new Error('An idea must have an active evaluation stage before it can be assigned.');
+    }
+
+    const assignedBy = this.auth.currentUser?.uid;
+    if (!assignedBy) {
+      throw new Error('An authenticated administrator is required to assign an evaluator.');
+    }
+
+    const assignmentId = `${idea.id}_${idea.stageId}_${evaluator.id}`;
+    const assignmentRef = doc(this.firestore, 'assignments', assignmentId);
+    if ((await getDoc(assignmentRef)).exists()) {
+      throw new Error('This evaluator already has an assignment for the current stage.');
+    }
+
+    const batch = writeBatch(this.firestore);
+    batch.set(assignmentRef, {
       ideaId: idea.id,
       stageId: idea.stageId,
       evaluatorUid: evaluator.id,
       status: 'pending',
-      assignedBy: this.auth.currentUser?.uid ?? null,
+      assignedBy,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    if (evaluator.evaluatorType === 'external') {
+      const [ideaDocument, stageDocument] = await Promise.all([
+        this.userDataService.getIdeaById(idea.id),
+        getDoc(doc(this.firestore, 'stages', idea.stageId)),
+      ]);
+      if (!ideaDocument || !stageDocument.exists()) {
+        throw new Error('The idea or evaluation stage could not be found.');
+      }
+
+      const stage = stageDocument.data();
+      const stageName = stage['name'];
+      const criteriaSetId = stage['criteriaSetId'];
+      if (typeof stageName !== 'string' || typeof criteriaSetId !== 'string') {
+        throw new Error('The evaluation stage configuration is invalid.');
+      }
+
+      const criteriaSnapshot = await getDoc(doc(this.firestore, 'criteriaSets', criteriaSetId));
+      if (!criteriaSnapshot.exists()) {
+        throw new Error('The stage scoring criteria could not be found.');
+      }
+
+      const evaluatorView: Omit<EvaluatorIdeaView, 'createdAt'> = {
+        ideaId: idea.id,
+        assignmentId,
+        evaluatorUid: evaluator.id,
+        stageId: idea.stageId,
+        stageName,
+        criteriaSetId,
+        criteriaSet: parseEvaluationCriteriaSet(criteriaSetId, criteriaSnapshot.data()),
+        title: ideaDocument.title,
+        category: ideaDocument.category,
+        problem: ideaDocument.problem,
+        proposedSolution: ideaDocument.proposedSolution,
+        intendedBeneficiaries: ideaDocument.intendedBeneficiaries,
+        plannedLocation: ideaDocument.plannedLocation,
+        marketPlan: ideaDocument.marketPlan,
+        feasibilityPlan: ideaDocument.feasibilityPlan,
+        financingPlan: ideaDocument.financingPlan,
+        milestones: ideaDocument.milestones,
+        automatedReview: ideaDocument.automatedReview,
+      };
+      batch.set(
+        doc(this.firestore, 'ideas', idea.id, 'evaluatorViews', assignmentId),
+        { ...evaluatorView, createdAt: serverTimestamp() },
+      );
+    }
+
+    await batch.commit();
   }
 
   async removeAssignment(assignmentId: string): Promise<void> {
-    await deleteDoc(doc(this.firestore, 'assignments', assignmentId));
+    const assignmentRef = doc(this.firestore, 'assignments', assignmentId);
+    const assignment = await getDoc(assignmentRef);
+    if (!assignment.exists()) {
+      throw new Error('The evaluator assignment could not be found.');
+    }
+
+    const ideaId = assignment.data()['ideaId'];
+    if (typeof ideaId !== 'string') {
+      throw new Error('The evaluator assignment has an invalid idea reference.');
+    }
+
+    const batch = writeBatch(this.firestore);
+    batch.delete(assignmentRef);
+    batch.delete(doc(this.firestore, 'ideas', ideaId, 'evaluatorViews', assignmentId));
+    await batch.commit();
   }
 
-  /** Changes the status and records the change in the idea's timeline in one atomic write. */
-  async setStatus(idea: AdminIdeaRow, status: IdeaStatus): Promise<void> {
-    const batch = writeBatch(this.firestore);
-
-    batch.update(doc(this.firestore, 'ideas', idea.id), { status, updatedAt: serverTimestamp() });
-    batch.set(doc(collection(this.firestore, 'ideas', idea.id, 'statusHistory')), {
-      from: idea.status,
-      to: status,
-      stageId: idea.stageId,
-      byUid: this.auth.currentUser?.uid ?? null,
-      byRole: 'admin',
-      at: serverTimestamp(),
-    });
-
-    await batch.commit();
+  /** Functions keep the workflow, audit log, notification, and reporting stats in sync. */
+  async setStatus(idea: AdminIdeaRow, status: IdeaStatus, note: string | null = null): Promise<void> {
+    const changeStatus = httpsCallable<
+      { ideaId: string; status: IdeaStatus; note: string | null; stageId: string | null },
+      { ideaId: string; status: string }
+    >(this.functions, 'setIdeaStatus');
+    await changeStatus({ ideaId: idea.id, status, note, stageId: idea.stageId });
   }
 
   private toRow(id: string, data: DocumentData): AdminIdeaRow {
@@ -194,8 +261,8 @@ export class AdminIdeaService {
   }
 
   private normalizeStatus(value: unknown): IdeaStatus {
-    const text = String(value ?? '').toLowerCase().trim().replace(/\s+/g, '_');
-    return IDEA_STATUSES.some(option => option.value === text) ? (text as IdeaStatus) : 'draft';
+    const text = typeof value === 'string' ? value.toLowerCase().trim().replace(/\s+/g, '_') : value;
+    return requireIdeaStatus(text);
   }
 
   private toDate(value: unknown): Date | null {

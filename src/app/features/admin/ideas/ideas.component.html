@@ -10,7 +10,7 @@
   <div class="idea-counts" aria-label="Idea summary">
     <span class="count-chip"><strong>{{ counts().total }}</strong> Total</span>
     <span class="count-chip"><strong>{{ counts().submitted }}</strong> Submitted</span>
-    <span class="count-chip"><strong>{{ counts().underReview }}</strong> Under review</span>
+    <span class="count-chip"><strong>{{ counts().humanReview }}</strong> {{ stages.human_review.label }}</span>
     <span class="count-chip"><strong>{{ counts().approved }}</strong> Approved</span>
     <span class="count-chip"><strong>{{ counts().awarded }}</strong> Awarded</span>
   </div>
@@ -81,7 +81,7 @@
             <label>
               <span class="sr-only">Change status of {{ idea.title }}</span>
               <select class="row-select" (change)="onStatusChange($event, idea)">
-                @for (option of statusOptions; track option.value) {
+                @for (option of statusOptionsFor(idea); track option.value) {
                   <option [value]="option.value" [selected]="option.value === idea.status">{{ option.label }}</option>
                 }
               </select>
@@ -97,6 +97,33 @@
               </select>
             </label>
           </div>
+
+          @if (pendingStatusChange(); as pending) {
+            @if (pending.idea.id === idea.id) {
+              <form class="status-note-form" (ngSubmit)="confirmStatusChange()">
+                <h3>Reason required for {{ statusLabel(pending.status).toLowerCase() }}</h3>
+                <label [for]="'status-note-' + idea.id">Reason for this status change</label>
+                <textarea
+                  #statusNoteTextarea
+                  [id]="'status-note-' + idea.id"
+                  [formControl]="statusNoteControl"
+                  maxlength="500"
+                  required
+                  [attr.aria-invalid]="statusNoteControl.touched && statusNoteControl.invalid ? 'true' : null"
+                  [attr.aria-describedby]="statusNoteControl.touched && statusNoteControl.invalid ? 'status-note-error-' + idea.id : null"
+                ></textarea>
+                @if (statusNoteControl.touched && statusNoteControl.invalid) {
+                  <p class="field-error" [id]="'status-note-error-' + idea.id">
+                    Enter a reason of up to 500 characters.
+                  </p>
+                }
+                <div class="status-note-actions">
+                  <button type="submit" [disabled]="statusNoteControl.invalid">Confirm status change</button>
+                  <button type="button" class="secondary-button" (click)="cancelStatusChange()">Cancel</button>
+                </div>
+              </form>
+            }
+          }
         </article>
       } @empty {
         <p class="empty-state">

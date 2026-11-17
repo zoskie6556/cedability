@@ -27,7 +27,7 @@ describe('roleGuard', () => {
     router = TestBed.inject(Router);
   });
 
-  it.each(['user', 'evaluator', 'admin'] as const)(
+  it.each(['user', 'submitter', 'evaluator', 'adjudicator', 'admin'] as const)(
     'allows the matching %s role',
     async (role: UserRole) => {
       roleService.loadCurrentRole.mockResolvedValue({ status: 'assigned', role });
@@ -36,12 +36,34 @@ describe('roleGuard', () => {
         roleGuard(role)(route, state),
       );
 
+      it.each(['adjudicator', 'admin'] as const)(
+        'allows %s on a route shared with admins',
+        async (role) => {
+          roleService.loadCurrentRole.mockResolvedValue({ status: 'assigned', role });
+          const result = await TestBed.runInInjectionContext(() =>
+            roleGuard(['adjudicator', 'admin'])(route, state),
+          );
+          expect(result).toBe(true);
+        },
+      );
+
+      it('redirects an evaluator away from an adjudicator and admin route', async () => {
+        roleService.loadCurrentRole.mockResolvedValue({ status: 'assigned', role: 'evaluator' });
+        const result = await TestBed.runInInjectionContext(() =>
+          roleGuard(['adjudicator', 'admin'])(route, state),
+        );
+        expect(result).toBeInstanceOf(UrlTree);
+        expect(router.serializeUrl(result as UrlTree)).toBe('/dashboard');
+      });
+
       expect(result).toBe(true);
     },
   );
 
   it.each([
     ['user', 'admin'],
+    ['submitter', 'admin'],
+    ['admin', 'submitter'],
     ['evaluator', 'admin'],
     ['admin', 'evaluator'],
   ] as const)(

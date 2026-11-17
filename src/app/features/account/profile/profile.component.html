@@ -618,7 +618,10 @@
                       <h3>{{ idea.title }}</h3>
                       <p>{{ idea.plannedLocation }}</p>
                     </div>
-                    <span class="idea-status">{{ idea.status }}</span>
+                    <span
+                      [class]="'idea-status idea-status-' + stages[idea.status].health"
+                      [title]="stages[idea.status].help"
+                    >{{ stages[idea.status].label }}</span>
                   </div>
                   <p class="idea-summary">{{ idea.proposedSolution }}</p>
                   @if (idea.automatedReview; as report) {

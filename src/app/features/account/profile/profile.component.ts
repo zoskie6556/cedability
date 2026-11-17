@@ -19,6 +19,7 @@ import type { IdeaQuestion } from '../../../shared/models/idea-evaluation.model'
 import type { Idea } from '../../../shared/models/idea.model';
 import type { Profile, UserType } from '../../../shared/models/profile.model';
 import type { User } from '../../../shared/models/user.model';
+import { STAGES } from '../../../shared/workflow/idea-workflow';
 
 @Component({
   selector: 'app-profile',
@@ -38,6 +39,7 @@ export class ProfileComponent implements OnInit {
 
   protected readonly user = signal<User | null>(null);
   protected readonly ideas = signal<Idea[]>([]);
+  protected readonly stages = STAGES;
   protected readonly ideaQuestions = signal<Record<string, IdeaQuestion[] | undefined>>({});
   protected readonly responseDrafts = signal<Partial<Record<string, string>>>({});
   protected readonly respondingToQuestion = signal<string | null>(null);

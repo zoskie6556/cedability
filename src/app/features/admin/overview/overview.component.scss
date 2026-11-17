@@ -284,6 +284,18 @@ h3 {
   background: linear-gradient(90deg, var(--overview-accent), color-mix(in srgb, var(--overview-accent) 55%, #ffffff));
 }
 
+.bar .bar-fill-green {
+  background: var(--admin-success);
+}
+
+.bar .bar-fill-yellow {
+  background: var(--admin-warning);
+}
+
+.bar .bar-fill-red {
+  background: var(--admin-danger);
+}
+
 .line-chart {
   height: 200px;
   margin-top: 1rem;

@@ -1,4 +1,4 @@
-export const USER_ROLES = ['user', 'evaluator', 'admin'] as const;
+export const USER_ROLES = ['user', 'submitter', 'evaluator', 'adjudicator', 'admin'] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 

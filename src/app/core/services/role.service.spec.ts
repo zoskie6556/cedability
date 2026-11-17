@@ -28,21 +28,26 @@ describe('RoleService', () => {
     roleService = TestBed.inject(RoleService);
   });
 
-  it.each(['user', 'evaluator', 'admin'] as const)(
+  it.each([
+    ['user', 'submitter'],
+    ['submitter', 'submitter'],
+    ['evaluator', 'evaluator'],
+    ['admin', 'admin'],
+  ] as const)(
     'loads the %s role from the protected user document',
-    async (role) => {
-      userDataService.getRoleRecord.mockResolvedValue({ exists: true, role });
+    async (storedRole, expectedRole) => {
+      userDataService.getRoleRecord.mockResolvedValue({ exists: true, role: storedRole });
 
       await expect(roleService.loadCurrentRole()).resolves.toEqual({
         status: 'assigned',
-        role,
+        role: expectedRole,
       });
       expect(userDataService.getRoleRecord).toHaveBeenCalledWith(authUser.uid);
     },
   );
 
   it('gets the initialized current user from AuthService', async () => {
-    userDataService.getRoleRecord.mockResolvedValue({ exists: true, role: 'user' });
+    userDataService.getRoleRecord.mockResolvedValue({ exists: true, role: 'submitter' });
 
     await roleService.loadCurrentRole();
 

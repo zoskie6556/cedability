@@ -70,7 +70,9 @@
         <li>
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
-          <div class="bar"><i [style.width.%]="item.percent"></i></div>
+          <div class="bar">
+            <i [class]="'bar-fill bar-fill-' + item.health" [style.width.%]="item.percent"></i>
+          </div>
         </li>
       }
     </ul>

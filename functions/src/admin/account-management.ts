@@ -1,8 +1,10 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { writeAuditLog } from '../lib/audit';
+import { IDEA_STATUSES, isIdeaStatus, type IdeaStatus } from '../shared/idea-workflow';
+import { summarizeChats, summarizeStageDurations } from '../stats/overview';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -69,6 +71,51 @@ function normaliseOptionalPhone(value: unknown): string | undefined {
   return phone || undefined;
 }
 
+function normaliseEvaluatorType(
+  value: unknown,
+  role: AdminRole,
+): 'internal' | 'external' | null {
+  if (role !== 'evaluator') {
+    if (value !== undefined && value !== null) {
+      throw new HttpsError('invalid-argument', 'Evaluator type is only valid for evaluator accounts.');
+    }
+    return null;
+  }
+
+  if (value === undefined || value === null || value === '') {
+    return 'internal';
+  }
+  if (value === 'internal' || value === 'external') {
+    return value;
+  }
+
+  throw new HttpsError('invalid-argument', 'Evaluator type must be internal or external.');
+}
+
+function normaliseEvaluatorOrganization(value: unknown, role: AdminRole, evaluatorType: 'internal' | 'external' | null): string | null {
+  if (role !== 'evaluator') {
+    if (value !== undefined && value !== null && value !== '') {
+      throw new HttpsError('invalid-argument', 'Organization is only valid for evaluator accounts.');
+    }
+    return null;
+  }
+  if (value === undefined || value === null || value === '') {
+    if (evaluatorType === 'external') {
+      throw new HttpsError('invalid-argument', 'An organization is required for external evaluators.');
+    }
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new HttpsError('invalid-argument', 'Organization must be a string.');
+  }
+
+  const organization = value.trim();
+  if (!organization || organization.length > 160) {
+    throw new HttpsError('invalid-argument', 'Organization must be between 1 and 160 characters.');
+  }
+  return organization;
+}
+
 export async function createUserAccount(
   request: CallableRequest<Record<string, unknown>>,
 ): Promise<{ uid: string; email: string; link: string }> {
@@ -77,6 +124,12 @@ export async function createUserAccount(
   const email = normaliseString(request.data.email, 'email').toLowerCase();
   const phone = normaliseOptionalPhone(request.data.phone);
   const role = normaliseRole(request.data.role);
+  const evaluatorType = normaliseEvaluatorType(request.data.evaluatorType, role);
+  const organization = normaliseEvaluatorOrganization(
+    request.data.organization,
+    role,
+    evaluatorType,
+  );
 
   const user = await getAuth().createUser({
     email,
@@ -92,6 +145,8 @@ export async function createUserAccount(
       displayName,
       email,
       role,
+      evaluatorType,
+      organization,
       phone: phone ?? null,
       isActive: true,
       emailVerified: false,
@@ -127,7 +182,18 @@ export async function setUserRole(
   }
 
   const targetDoc = await getFirestore().doc(`users/${uid}`).get();
-  const targetRole = targetDoc.exists ? targetDoc.data()?.role : undefined;
+  const targetData = targetDoc.exists ? targetDoc.data() : undefined;
+  const targetRole = targetData?.role;
+  const evaluatorType =
+    role === 'evaluator'
+      ? targetData?.evaluatorType === 'external'
+        ? 'external'
+        : 'internal'
+      : null;
+  const organization =
+    role === 'evaluator' && evaluatorType === 'external' && typeof targetData?.organization === 'string'
+      ? targetData.organization
+      : null;
   const remainingAdmins = await getAuth().listUsers();
   const adminCount = remainingAdmins.users.filter(user => user.customClaims?.role === 'admin').length;
   if (targetRole === 'admin' && role !== 'admin' && adminCount <= 1) {
@@ -139,6 +205,8 @@ export async function setUserRole(
   await getFirestore().doc(`users/${uid}`).set(
     {
       role,
+      evaluatorType,
+      organization,
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
@@ -254,16 +322,22 @@ export async function recomputeStats(
   request: CallableRequest<Record<string, unknown>>,
 ): Promise<{ ok: true }> {
   ensureAdmin(request);
+  const db = getFirestore();
 
-  const [userSnapshot, ideaSnapshot, ticketSnapshot, chatSnapshot] = await Promise.all([
-    getFirestore().collection('users').get(),
-    getFirestore().collection('ideas').get(),
-    getFirestore().collection('tickets').get(),
-    getFirestore().collection('chats').get(),
+  const [userSnapshot, ideaSnapshot, ticketSnapshot, chatSnapshot, historySnapshot, adjudicationSnapshot] =
+    await Promise.all([
+    db.collection('users').get(),
+    db.collection('ideas').get(),
+    db.collection('tickets').get(),
+    db.collection('chats').get(),
+    db.collectionGroup('statusHistory').get(),
+    db.collectionGroup('adjudications').get(),
   ]);
 
   const users = userSnapshot.docs.map(document => document.data());
-  const ideas = ideaSnapshot.docs.map(document => document.data());
+  const ideas: Array<Record<string, unknown> & { id: string }> = ideaSnapshot.docs.map(
+    document => ({ ...document.data(), id: document.id }),
+  );
   const tickets = ticketSnapshot.docs.map(document => document.data());
   const chats = chatSnapshot.docs.map(document => document.data());
 
@@ -277,41 +351,65 @@ export async function recomputeStats(
     }
   }
 
-  const ideasByStatus = { draft: 0, submitted: 0, under_review: 0, approved: 0, rejected: 0, awarded: 0 };
+  const byStatus = Object.fromEntries(IDEA_STATUSES.map(status => [status, 0])) as Record<IdeaStatus, number>;
   for (const idea of ideas) {
-    const rawStatus = idea.status;
-    const statusKey = typeof rawStatus === 'string' ? rawStatus : 'submitted';
-    if (statusKey in ideasByStatus) {
-      ideasByStatus[statusKey as keyof typeof ideasByStatus] += 1;
-    } else {
-      ideasByStatus.submitted += 1;
-    }
+    byStatus[normalizeIdeaStatus(idea['status'])] += 1;
   }
 
-  const ideasByCategory: Record<string, number> = {};
+  const byCategory: Record<string, number> = {};
   for (const idea of ideas) {
-    const category = typeof idea.category === 'string' ? idea.category : 'uncategorised';
-    ideasByCategory[category] = (ideasByCategory[category] ?? 0) + 1;
+    const category = typeof idea['category'] === 'string' ? idea['category'] : 'uncategorised';
+    byCategory[category] = (byCategory[category] ?? 0) + 1;
   }
 
   const ideasPerDay: Record<string, number> = {};
   for (const idea of ideas) {
-    const createdAt = idea.createdAt;
-    if (!createdAt || typeof createdAt.toDate !== 'function') {
-      continue;
-    }
-    const dateKey = createdAt.toDate().toISOString().slice(0, 10);
+    const createdAt = dateFromUnknown(idea['createdAt']);
+    if (!createdAt) continue;
+    const dateKey = createdAt.toISOString().slice(0, 10);
     ideasPerDay[dateKey] = (ideasPerDay[dateKey] ?? 0) + 1;
   }
+
+  const stageDurations = summarizeStageDurations(
+    ideas.map(idea => ({
+      id: idea.id,
+      createdAt: idea['createdAt'],
+      submittedAt: idea['submittedAt'],
+    })),
+    historySnapshot.docs.flatMap(document => {
+      const ideaId = document.ref.parent.parent?.id;
+      return ideaId
+        ? [{
+            ideaId,
+            from: document.get('from'),
+            to: document.get('to'),
+            at: document.get('at'),
+          }]
+        : [];
+    }),
+  );
+  const evaluationOutcomes: Record<string, number> = { advance: 0, revise: 0, reject: 0 };
+  for (const adjudication of adjudicationSnapshot.docs) {
+    const outcome = adjudication.get('decision');
+    if (typeof outcome === 'string' && outcome in evaluationOutcomes) {
+      evaluationOutcomes[outcome] += 1;
+    }
+  }
+  const chatAnalytics = summarizeChats(chats);
 
   const overviewDoc = {
     totalUsers: users.length,
     usersByRole,
     activeUsers: users.filter(user => user.isActive !== false).length,
     totalIdeas: ideas.length,
-    ideasByStatus,
-    ideasByCategory,
+    byStatus,
+    byCategory,
+    ideasByStatus: byStatus,
+    ideasByCategory: byCategory,
     ideasPerDay,
+    ...stageDurations,
+    evaluationOutcomes,
+    chatAnalytics,
     openTickets: tickets.filter(ticket => ticket.status !== 'resolved' && ticket.status !== 'closed').length,
     resolvedTickets: tickets.filter(ticket => ticket.status === 'resolved' || ticket.status === 'closed').length,
     activeChats: chats.filter(chat => chat.status !== 'closed').length,
@@ -321,6 +419,25 @@ export async function recomputeStats(
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  await getFirestore().doc('stats/overview').set(overviewDoc, { merge: true });
+  await db.doc('stats/overview').set(overviewDoc, { merge: true });
   return { ok: true };
+}
+
+function normalizeIdeaStatus(value: unknown): IdeaStatus {
+  if (isIdeaStatus(value)) return value;
+  if (value === 'draft') return 'submitted';
+  if (value === 'under-review' || value === 'under_review') return 'human_review';
+  if (value === 'needs-revision' || value === 'needs_revision' || value === 'feedback_requested') {
+    return 'needs_amendment';
+  }
+  if (value === 'revised') return 'ai_screening';
+  if (value === 'accepted') return 'approved';
+  if (value === 'declined') return 'rejected';
+  return 'submitted';
+}
+
+function dateFromUnknown(value: unknown): Date | null {
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  return null;
 }

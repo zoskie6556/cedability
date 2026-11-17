@@ -1,303 +1,256 @@
-<main id="main-content" class="idea-page">
-  <div class="idea-shell">
-    @if (isLoading()) {
-      <section class="page-state" role="status" aria-live="polite">
-        <span class="state-spinner" aria-hidden="true"></span>
-        <p>Checking your account...</p>
-      </section>
-    } @else if (loadError()) {
-      <section class="page-state" role="alert" aria-labelledby="idea-load-error-title">
-        <p class="eyebrow">Submission unavailable</p>
-        <h1 id="idea-load-error-title">We couldn’t open the idea form</h1>
-        <p>{{ loadError() }}</p>
-        <button class="button-primary" type="button" (click)="loadUser()">Try again</button>
-      </section>
-    } @else if (!user()) {
-      <section class="page-state" aria-labelledby="idea-signin-title">
-        <p class="eyebrow">Your next step</p>
-        <h1 id="idea-signin-title">Log in to submit an idea</h1>
-        <p>Your idea will be saved to your account so you can follow it from your profile.</p>
-        <a class="button-primary" routerLink="/account/user/login">Log in</a>
-      </section>
-    } @else {
-      <header class="idea-heading">
-        <p class="eyebrow">Start something meaningful</p>
-        <h1>Build your idea plan</h1>
-        <p>
-          Work through each part of your plan. It helps human evaluators understand the need,
-          feasibility, costs, and the next steps.
-        </p>
-      </header>
+@if (loadingIdea()) {
+  <section class="page" aria-live="polite">
+    <app-idea-loader label="Loading your idea for resubmission" />
+  </section>
+} @else if (ideaLoadError(); as error) {
+  <section class="page" aria-labelledby="update-error-title">
+    <h1 id="update-error-title">Update unavailable</h1>
+    <p class="error" role="alert">{{ error }}</p>
+    <a class="tracking-link" routerLink="/tracking/status">Return to tracking</a>
+  </section>
+} @else {
+<section class="page" aria-labelledby="idea-heading">
+  <h1 id="idea-heading">{{ pageHeading() }}</h1>
+  <p class="lead">{{ pageLead() }}</p>
+  @if (isResubmission()) {
+    <p class="note">Your existing plan has been prefilled. The updated submission will be screened again.</p>
+  }
 
-      <section class="idea-form-card" aria-labelledby="idea-form-title">
-        <div class="form-intro">
-          <h2 id="idea-form-title">Your submission</h2>
-          <p>Step {{ currentStep() + 1 }} of {{ stepTitles.length }}: {{ stepTitles[currentStep()] }}</p>
-          <progress
-            class="step-progress"
-            [value]="currentStep() + 1"
-            [max]="stepTitles.length"
-            [attr.aria-label]="'Step ' + (currentStep() + 1) + ' of ' + stepTitles.length"
-          ></progress>
-        </div>
-
-        <form class="idea-form" [formGroup]="form" (ngSubmit)="submit()">
-          @if (currentStep() === 0) {
-            <section class="form-step" formGroupName="basics" aria-labelledby="basics-title">
-              <h3 id="basics-title">The idea</h3>
-              <div class="form-field">
-                <label for="idea-title">Idea title</label>
-                <input id="idea-title" type="text" maxlength="120" formControlName="title" />
-                @if (form.controls.basics.controls.title.touched && form.controls.basics.controls.title.invalid) {
-                  <span class="field-error">Add a title of 120 characters or fewer.</span>
-                } @else {
-                  <span class="field-hint">Keep it short and clear.</span>
-                }
-              </div>
-
-              <div class="form-field">
-                <label for="idea-problem">What problem or need does it address?</label>
-                <textarea id="idea-problem" rows="4" maxlength="2000" formControlName="problem"></textarea>
-                @if (form.controls.basics.controls.problem.touched && form.controls.basics.controls.problem.invalid) {
-                  <span class="field-error">Describe the problem in 2,000 characters or fewer.</span>
-                }
-              </div>
-
-              <div class="form-field">
-                <label for="idea-solution">How would your idea help?</label>
-                <textarea
-                  id="idea-solution"
-                  rows="4"
-                  maxlength="3000"
-                  formControlName="proposedSolution"
-                ></textarea>
-                @if (form.controls.basics.controls.proposedSolution.touched && form.controls.basics.controls.proposedSolution.invalid) {
-                  <span class="field-error">Describe your proposed solution in 3,000 characters or fewer.</span>
-                }
-              </div>
-
-              <div class="form-grid">
-                <div class="form-field">
-                  <label for="idea-beneficiaries">Who could benefit?</label>
-                  <textarea id="idea-beneficiaries" rows="3" maxlength="1000" formControlName="intendedBeneficiaries"></textarea>
-                  @if (form.controls.basics.controls.intendedBeneficiaries.touched && form.controls.basics.controls.intendedBeneficiaries.invalid) {
-                    <span class="field-error">Tell us who the idea is intended to help.</span>
-                  }
-                </div>
-
-                <div class="form-field">
-                  <label for="idea-location">Where would it happen?</label>
-                  <input
-                    id="idea-location"
-                    type="text"
-                    maxlength="160"
-                    autocomplete="address-level2"
-                    formControlName="plannedLocation"
-                  />
-                  @if (form.controls.basics.controls.plannedLocation.touched && form.controls.basics.controls.plannedLocation.invalid) {
-                    <span class="field-error">Add the place or community for this idea.</span>
-                  }
-                </div>
-              </div>
-            </section>
-          } @else if (currentStep() === 1) {
-            <section class="form-step" formGroupName="market" aria-labelledby="market-title">
-              <h3 id="market-title">The market and need</h3>
-              <p class="step-description">Describe the people or organisations this idea serves and what you have learned so far.</p>
-              <div class="form-field">
-                <label for="idea-target-market">Who is the target market or community?</label>
-                <textarea id="idea-target-market" rows="3" maxlength="1500" formControlName="targetMarket"></textarea>
-              </div>
-              <div class="form-field">
-                <label for="idea-alternatives">What do people use or do today instead?</label>
-                <textarea id="idea-alternatives" rows="3" maxlength="1500" formControlName="alternatives"></textarea>
-              </div>
-              <div class="form-field">
-                <label for="idea-differentiation">How is your approach different or better suited?</label>
-                <textarea id="idea-differentiation" rows="3" maxlength="1500" formControlName="differentiation"></textarea>
-              </div>
-              <div class="form-field">
-                <label for="idea-market-validation">What conversations, research, or tests support this need?</label>
-                <textarea id="idea-market-validation" rows="3" maxlength="1500" formControlName="marketValidation"></textarea>
-              </div>
-              @if (form.controls.market.touched && form.controls.market.invalid) {
-                <p class="field-error" role="status">Complete each market field before continuing.</p>
-              }
-            </section>
-          } @else if (currentStep() === 2) {
-            <section class="form-step" formGroupName="feasibility" aria-labelledby="feasibility-title">
-              <h3 id="feasibility-title">Feasibility and risks</h3>
-              <div class="form-field">
-                <label for="idea-technical-approach">What will you build or provide, and how?</label>
-                <textarea id="idea-technical-approach" rows="4" maxlength="2000" formControlName="technicalApproach"></textarea>
-              </div>
-              <div class="form-field">
-                <label for="idea-operational-plan">What people, equipment, permissions, or partners will be needed?</label>
-                <textarea id="idea-operational-plan" rows="4" maxlength="2000" formControlName="operationalPlan"></textarea>
-              </div>
-              <div class="form-field">
-                <label for="idea-validation-evidence">What evidence or early tests do you already have? (optional)</label>
-                <textarea id="idea-validation-evidence" rows="3" maxlength="2000" formControlName="validationEvidence"></textarea>
-              </div>
-              <div class="form-grid">
-                <div class="form-field">
-                  <label for="idea-assumptions">What assumptions still need to be tested?</label>
-                  <textarea id="idea-assumptions" rows="3" maxlength="1500" formControlName="assumptions"></textarea>
-                </div>
-                <div class="form-field">
-                  <label for="idea-risks">What could go wrong, and how might you reduce the risks?</label>
-                  <textarea id="idea-risks" rows="3" maxlength="1500" formControlName="risks"></textarea>
-                </div>
-              </div>
-              @if (form.controls.feasibility.touched && form.controls.feasibility.invalid) {
-                <p class="field-error" role="status">Complete the required feasibility fields before continuing.</p>
-              }
-            </section>
-          } @else {
-            <section class="form-step" formGroupName="financing" aria-labelledby="financing-title">
-              <h3 id="financing-title">Financing and delivery</h3>
-              <div class="form-grid">
-                <div class="form-field">
-                  <label for="idea-currency">Currency code</label>
-                  <input id="idea-currency" type="text" maxlength="3" formControlName="currency" />
-                </div>
-                <div class="form-field">
-                  <label for="idea-funding-needed">Estimated total funding needed</label>
-                  <input id="idea-funding-needed" type="number" min="0.01" step="0.01" formControlName="totalFundingNeeded" />
-                </div>
-              </div>
-              <div class="form-field">
-                <label for="idea-funding-sources">What funding sources or contributions do you plan to use?</label>
-                <textarea id="idea-funding-sources" rows="3" maxlength="1500" formControlName="fundingSources"></textarea>
-              </div>
-
-              <fieldset class="repeatable-group" formArrayName="costs">
-                <legend>Cost breakdown</legend>
-                @for (cost of form.controls.financing.controls.costs.controls; track $index) {
-                  <div class="repeatable-card" [formGroupName]="$index">
-                    <div class="form-grid">
-                      <div class="form-field">
-                        <label [for]="'idea-cost-item-' + $index">Cost item {{ $index + 1 }}</label>
-                        <input [id]="'idea-cost-item-' + $index" type="text" maxlength="120" formControlName="item" />
-                      </div>
-                      <div class="form-field">
-                        <label [for]="'idea-cost-amount-' + $index">Amount</label>
-                        <input [id]="'idea-cost-amount-' + $index" type="number" min="0.01" step="0.01" formControlName="amount" />
-                      </div>
-                    </div>
-                    <div class="form-field">
-                      <label [for]="'idea-cost-description-' + $index">What does this cost cover?</label>
-                      <textarea [id]="'idea-cost-description-' + $index" rows="2" maxlength="500" formControlName="description"></textarea>
-                    </div>
-                    @if (form.controls.financing.controls.costs.length > 1) {
-                      <button class="text-button" type="button" (click)="removeCostItem($index)">Remove cost item</button>
-                    }
-                  </div>
-                }
-                <button
-                  class="button-secondary"
-                  type="button"
-                  [disabled]="form.controls.financing.controls.costs.length >= 10"
-                  (click)="addCostItem()"
-                >
-                  Add a cost item
-                </button>
-              </fieldset>
-
-              <fieldset class="repeatable-group" formArrayName="milestones">
-                <legend>Milestones</legend>
-                <p class="step-description">Break the work into measurable steps with a target month.</p>
-                @for (milestone of form.controls.financing.controls.milestones.controls; track $index) {
-                  <div class="repeatable-card" [formGroupName]="$index">
-                    <div class="form-grid">
-                      <div class="form-field">
-                        <label [for]="'idea-milestone-title-' + $index">Milestone {{ $index + 1 }}</label>
-                        <input [id]="'idea-milestone-title-' + $index" type="text" maxlength="120" formControlName="title" />
-                      </div>
-                      <div class="form-field">
-                        <label [for]="'idea-milestone-date-' + $index">Target month</label>
-                        <input [id]="'idea-milestone-date-' + $index" type="month" formControlName="targetDate" />
-                      </div>
-                    </div>
-                    <div class="form-grid">
-                      <div class="form-field">
-                        <label [for]="'idea-milestone-measure-' + $index">How will you know it is complete?</label>
-                        <textarea [id]="'idea-milestone-measure-' + $index" rows="2" maxlength="500" formControlName="successMeasure"></textarea>
-                      </div>
-                      <div class="form-field">
-                        <label [for]="'idea-milestone-cost-' + $index">Estimated milestone cost (optional)</label>
-                        <input [id]="'idea-milestone-cost-' + $index" type="number" min="0" step="0.01" formControlName="estimatedCost" />
-                      </div>
-                    </div>
-                    @if (form.controls.financing.controls.milestones.length > 1) {
-                      <button class="text-button" type="button" (click)="removeMilestone($index)">Remove milestone</button>
-                    }
-                  </div>
-                }
-                <button
-                  class="button-secondary"
-                  type="button"
-                  [disabled]="form.controls.financing.controls.milestones.length >= 10"
-                  (click)="addMilestone()"
-                >
-                  Add a milestone
-                </button>
-              </fieldset>
-
-              <aside class="ai-disclosure" aria-labelledby="ai-disclosure-title">
-                <h4 id="ai-disclosure-title">About the automated first look</h4>
-                <p>
-                  If you consent, the details in this plan will be sent to Google Gemini through
-                  our Firebase backend for an advisory analysis. The report can identify gaps and
-                  questions, but it does not determine eligibility, rank ideas, or make funding
-                  decisions. Human evaluators remain responsible for decisions.
-                </p>
-              </aside>
-              <div class="consent-field">
-                <input
-                  id="idea-ai-consent"
-                  type="checkbox"
-                  formControlName="aiAnalysisConsent"
-                  [attr.aria-invalid]="form.controls.financing.controls.aiAnalysisConsent.touched && form.controls.financing.controls.aiAnalysisConsent.invalid"
-                />
-                <label for="idea-ai-consent">
-                  I understand that my submission plan will be sent to Google for advisory analysis.
-                </label>
-              </div>
-              @if (form.controls.financing.controls.aiAnalysisConsent.touched && form.controls.financing.controls.aiAnalysisConsent.invalid) {
-                <p class="field-error" role="alert">Consent is required before this submission can be analyzed.</p>
-              }
-              @if (form.controls.financing.touched && form.controls.financing.invalid) {
-                <p class="field-error" role="status">Complete the financing, cost, and milestone details before submitting.</p>
-              }
-            </section>
-          }
-
-          @if (submitError()) {
-            <p class="form-error" role="alert">{{ submitError() }}</p>
-          }
-
-          <div class="form-actions">
-            @if (currentStep() === 0) {
-              <a class="text-link" routerLink="/account/user/profile">Back to profile</a>
-            } @else {
-              <button class="text-link text-button" type="button" (click)="previousStep()">Previous step</button>
-            }
-            @if (currentStep() < stepTitles.length - 1) {
-              <button class="button-primary" type="button" (click)="nextStep()">Continue</button>
-            } @else {
-              <button
-                class="button-primary"
-                type="submit"
-                [disabled]="isSubmitting()"
-                [attr.aria-busy]="isSubmitting()"
-              >
-                {{ isSubmitting() ? 'Submitting...' : 'Submit idea' }}
-              </button>
-            }
-          </div>
-        </form>
-      </section>
+  <div class="language">
+    <label for="language">Language I will speak in</label>
+    <select id="language" [value]="language()" (change)="setLanguage($event)">
+      @for (l of languages; track l.tag) {
+        <option [value]="l.tag" [selected]="l.tag === language()">{{ l.label }}</option>
+      }
+    </select>
+    @if (!language().startsWith('en')) {
+      <p class="note">
+        Your idea must be sent in English. Please check that the text is in English before you send
+        it. Automatic translation is coming soon.
+      </p>
     }
   </div>
-</main>
+
+  @if (draftRestored()) {
+    <div class="banner" role="status">
+      <p>We restored the idea you were working on.</p>
+      <button type="button" class="secondary" (click)="startFresh()">Start a new idea instead</button>
+    </div>
+  }
+
+  <div class="meter">
+    <p id="meter-label">Form completeness: <strong>{{ completeness() }}%</strong></p>
+    <div
+      class="track"
+      role="progressbar"
+      aria-labelledby="meter-label"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      [attr.aria-valuenow]="completeness()"
+    >
+      <div class="bar" [style.width.%]="completeness()"></div>
+    </div>
+  </div>
+
+  <nav aria-label="Idea form steps">
+    <ol class="steps">
+      @for (s of steps; track s.key; let i = $index) {
+        <li>
+          <button
+            type="button"
+            [attr.aria-current]="i === step() ? 'step' : null"
+            [disabled]="i > furthest()"
+            [class.done]="stepComplete()[i]"
+            (click)="goTo(i)"
+          >
+            <span class="num" aria-hidden="true">{{ stepComplete()[i] && i !== step() ? '✓' : i + 1 }}</span>
+            {{ s.label }}
+            <span class="sr-only">{{ stepComplete()[i] ? '(complete)' : '(not complete)' }}</span>
+          </button>
+        </li>
+      }
+    </ol>
+  </nav>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <h2 #stepHeading tabindex="-1">
+      Step {{ step() + 1 }} of {{ steps.length }}: {{ currentStep().label }}
+    </h2>
+    <p class="intro">{{ currentStep().intro }}</p>
+
+    @switch (currentStep().key) {
+      @case ('basics') {
+        <app-idea-field id="title" label="Name of your idea"
+          hint="A short name people will remember. Example: Solar cold rooms for farmers in the Okavango."
+          [control]="form.controls.basics.controls.title" [maxLength]="limits.title"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="problem" label="What problem are you solving?" [multiline]="true"
+          hint="Who is struggling, with what, and how often? Example: Vegetables rot within two days because there is no cold storage."
+          [control]="form.controls.basics.controls.problem" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="solution" label="What is your solution?" [multiline]="true"
+          hint="Explain it as if you were telling a friend. What will people see, use or buy?"
+          [control]="form.controls.basics.controls.proposedSolution" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="beneficiaries" label="Who will benefit?" [multiline]="true" [rows]="3"
+          hint="Example: 200 small-scale farmers and 15 local shops."
+          [control]="form.controls.basics.controls.intendedBeneficiaries" [maxLength]="limits.short"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="location" label="Where will you do this?"
+          hint="Town, village or district. Example: Francistown, North-East District."
+          [control]="form.controls.basics.controls.plannedLocation" [maxLength]="limits.short"
+          [voice]="true" [language]="language()" />
+      }
+
+      @case ('market') {
+        <app-idea-field id="target-market" label="Who are your customers or users?" [multiline]="true"
+          hint="Describe them: who they are, how many, where they are."
+          [control]="form.controls.market.controls.targetMarket" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="alternatives" label="What do people use today instead?" [multiline]="true"
+          hint="Other products, shops or habits. If you think there is nothing, say what people do now."
+          [control]="form.controls.market.controls.alternatives" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="differentiation" label="Why will people choose yours?" [multiline]="true"
+          hint="Cheaper, faster, closer, easier, better quality? Be specific."
+          [control]="form.controls.market.controls.differentiation" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="validation" label="How do you know people want this?" [multiline]="true"
+          hint="Who have you asked? What did they say? A survey, a trial or a first sale all count."
+          [control]="form.controls.market.controls.marketValidation" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+      }
+
+      @case ('feasibility') {
+        <app-idea-field id="technical" label="How will you build or deliver it?" [multiline]="true"
+          hint="Tools, equipment, skills and suppliers you will use."
+          [control]="form.controls.feasibility.controls.technicalApproach" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="operations" label="How will it run day to day?" [multiline]="true"
+          hint="Who does what, where, and how often?"
+          [control]="form.controls.feasibility.controls.operationalPlan" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="evidence" label="What proof do you have that it can work?" [multiline]="true"
+          hint="A prototype, a test, a pilot, a letter of support, or similar work you have done."
+          [control]="form.controls.feasibility.controls.validationEvidence" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="assumptions" label="What are you assuming will be true?" [multiline]="true"
+          hint="Example: customers will pay on delivery; electricity will be available."
+          [control]="form.controls.feasibility.controls.assumptions" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+        <app-idea-field id="risks" label="What could go wrong, and what will you do about it?" [multiline]="true"
+          hint="Every idea has risks. Naming them shows you have thought it through."
+          [control]="form.controls.feasibility.controls.risks" [maxLength]="limits.long"
+          [voice]="true" [language]="language()" />
+      }
+
+      @case ('financing') {
+        <div class="field-row">
+          <label for="currency">Currency</label>
+          <select id="currency" [formControl]="form.controls.financing.controls.currency">
+            @for (c of currencies; track c) {
+              <option [value]="c">{{ c }}</option>
+            }
+          </select>
+        </div>
+
+        @for (cost of costs.controls; track cost; let i = $index) {
+          <fieldset class="row">
+            <legend>Cost item {{ i + 1 }}</legend>
+            <app-idea-field [id]="'cost-' + i + '-item'" label="What is the cost for?"
+              [control]="cost.controls.item" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+            <app-idea-field [id]="'cost-' + i + '-amount'" label="Amount" type="number"
+              [control]="cost.controls.amount" />
+            <app-idea-field [id]="'cost-' + i + '-desc'" label="Notes (optional)"
+              [control]="cost.controls.description" [maxLength]="limits.short" />
+            <button type="button" class="secondary" [disabled]="costs.length === 1" (click)="removeCost(i)">
+              Remove cost item {{ i + 1 }}
+            </button>
+          </fieldset>
+        }
+        <button type="button" class="secondary" (click)="addCost()">Add another cost item</button>
+
+        <p class="total" aria-live="polite">
+          Total funding needed:
+          <strong>{{ form.controls.financing.controls.currency.value }} {{ totalFunding() | number: '1.2-2' }}</strong>
+        </p>
+
+        <app-idea-field id="funding-sources" label="Where will the money come from?" [multiline]="true" [rows]="3"
+          hint="Your own savings, a grant, a loan, customers paying in advance, or CEDA support."
+          [control]="form.controls.financing.controls.fundingSources" [maxLength]="limits.short"
+          [voice]="true" [language]="language()" />
+      }
+
+      @case ('milestones') {
+        @for (milestone of milestones.controls; track milestone; let i = $index) {
+          <fieldset class="row">
+            <legend>Milestone {{ i + 1 }}</legend>
+            <app-idea-field [id]="'ms-' + i + '-title'" label="What will you finish?"
+              [control]="milestone.controls.title" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+            <app-idea-field [id]="'ms-' + i + '-date'" label="Target date" type="date"
+              [control]="milestone.controls.targetDate" />
+            <app-idea-field [id]="'ms-' + i + '-measure'" label="How will you know it is done?"
+              hint="A number or a clear result. Example: 5 cold rooms installed."
+              [control]="milestone.controls.successMeasure" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+            <app-idea-field [id]="'ms-' + i + '-cost'" label="Estimated cost (optional)" type="number"
+              [control]="milestone.controls.estimatedCost" />
+            <button type="button" class="secondary" [disabled]="milestones.length === 1" (click)="removeMilestone(i)">
+              Remove milestone {{ i + 1 }}
+            </button>
+          </fieldset>
+        }
+        <button type="button" class="secondary" (click)="addMilestone()">Add another milestone</button>
+      }
+
+      @case ('consent') {
+        <ul class="review">
+          @for (s of steps; track s.key; let i = $index) {
+            @if (i < steps.length - 1) {
+              <li>
+                <span>{{ s.label }}: <strong>{{ stepComplete()[i] ? 'Complete' : 'Needs attention' }}</strong></span>
+                <button type="button" class="secondary" (click)="goTo(i)">Edit {{ s.label }}</button>
+              </li>
+            }
+          }
+        </ul>
+        <p class="total">
+          Total funding needed:
+          <strong>{{ form.controls.financing.controls.currency.value }} {{ totalFunding() | number: '1.2-2' }}</strong>
+        </p>
+
+        <div class="consent">
+          <input type="checkbox" id="ai-consent"
+            [formControl]="form.controls.consent.controls.aiAnalysis" aria-describedby="ai-consent-help" />
+          <label for="ai-consent" id="ai-consent-help">
+            I agree that the text of my idea is sent to Google Gemini through a CEDA Cloud Function
+            for an advisory check. My name, email and ID are not sent. The check helps evaluators;
+            people make every decision.
+          </label>
+        </div>
+        @if (form.controls.consent.controls.aiAnalysis.touched && form.controls.consent.controls.aiAnalysis.invalid) {
+          <p class="error">Please tick the box to send your idea.</p>
+        }
+      }
+    }
+
+    @if (submissionError(); as error) {
+      <p class="error" role="alert">{{ error }}</p>
+    }
+
+    @if (submitting()) {
+      <app-idea-loader [label]="isResubmission() ? 'Resubmitting your idea' : 'Submitting your idea'" />
+    }
+
+    <div class="actions">
+      <button type="button" class="secondary" [disabled]="step() === 0 || submitting()" (click)="back()">Back</button>
+      @if (isLastStep()) {
+        <button type="submit" class="primary" [disabled]="submitting()">
+          {{ isResubmission() ? 'Update and resubmit' : 'Send my idea' }}
+        </button>
+      } @else {
+        <button type="button" class="primary" [disabled]="submitting()" (click)="next()">Next</button>
+      }
+    </div>
+  </form>
+</section>
+}

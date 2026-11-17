@@ -6,9 +6,12 @@ export type RoleResolutionError = 'unassigned' | 'invalid' | 'unavailable';
 export function roleDashboardPath(role: UserRole): string {
   switch (role) {
     case 'user':
+    case 'submitter':
       return '/account/user/dashboard';
     case 'evaluator':
       return '/evaluation/review';
+    case 'adjudicator':
+      return '/evaluation/adjudication';
     case 'admin':
       return '/admin/admin-dashboard';
   }

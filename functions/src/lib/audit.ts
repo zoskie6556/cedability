@@ -9,16 +9,15 @@ export interface AuditLogInput {
   summary: string;
 }
 
+export function createAuditLogRecord(input: AuditLogInput) {
+  return {
+    ...input,
+    at: FieldValue.serverTimestamp(),
+  };
+}
+
 export async function writeAuditLog(input: AuditLogInput): Promise<void> {
   const db = getFirestore();
 
-  await db.collection('auditLogs').add({
-    actorUid: input.actorUid,
-    actorRole: input.actorRole,
-    action: input.action,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    summary: input.summary,
-    at: FieldValue.serverTimestamp(),
-  });
+  await db.collection('auditLogs').add(createAuditLogRecord(input));
 }

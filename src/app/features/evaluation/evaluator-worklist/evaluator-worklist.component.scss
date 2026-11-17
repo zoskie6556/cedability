@@ -1,0 +1,108 @@
+:host {
+  display: block;
+}
+
+.worklist-page {
+  min-height: calc(100vh - 200px);
+  padding: clamp(2rem, 5vw, 4rem) 1.25rem;
+  background:
+    radial-gradient(circle at 90% 8%, #f6e1ca 0, transparent 22rem),
+    var(--paper);
+}
+
+.worklist-shell {
+  width: min(900px, 100%);
+  margin: 0 auto;
+}
+
+.page-heading {
+  max-width: 700px;
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 0.55rem;
+  color: var(--ceda-primary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.page-heading h1 {
+  margin: 0;
+  color: var(--ceda-deep);
+  font-family: var(--display-font);
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.12;
+}
+
+.page-heading > p:last-child,
+.due-date {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.assignment-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.assignment-card,
+.state-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: clamp(1.1rem, 3vw, 1.7rem);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 20px 55px #4d211b12;
+}
+
+.assignment-card h2 {
+  margin: 0;
+  color: var(--ceda-deep);
+  font-size: 1.35rem;
+}
+
+.assignment-card .eyebrow,
+.due-date {
+  margin: 0.35rem 0;
+}
+
+.primary-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--ceda-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-button:focus-visible {
+  outline: 3px solid #1b4e82;
+  outline-offset: 3px;
+}
+
+.state-card {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .assignment-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

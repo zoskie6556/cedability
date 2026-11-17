@@ -79,6 +79,12 @@
               @if (user.phone) {
                 <div class="user-phone">{{ user.phone }}</div>
               }
+              @if (user.evaluatorType) {
+                <div class="user-phone">Evaluator type: {{ user.evaluatorType }}</div>
+              }
+              @if (user.organization) {
+                <div class="user-phone">Organization: {{ user.organization }}</div>
+              }
             </div>
           </div>
 
@@ -207,6 +213,20 @@
               <span class="detail-label">Role</span>
               <span class="detail-value">{{ formatRole(user.role) }}</span>
             </div>
+
+            @if (user.evaluatorType) {
+              <div class="detail-item">
+                <span class="detail-label">Evaluator type</span>
+                <span class="detail-value">{{ user.evaluatorType }}</span>
+              </div>
+            }
+
+            @if (user.organization) {
+              <div class="detail-item">
+                <span class="detail-label">Organization</span>
+                <span class="detail-value">{{ user.organization }}</span>
+              </div>
+            }
 
             <div class="detail-item">
               <span class="detail-label">Status</span>
@@ -378,7 +398,11 @@
 
         <div class="form-field">
           <label for="create-user-role">Role</label>
-          <select id="create-user-role" formControlName="role">
+          <select
+            id="create-user-role"
+            formControlName="role"
+            (change)="onCreateRoleChange($event)"
+          >
             <option value="submitter">User</option>
             <option value="agent">Support team</option>
             <option value="evaluator">Evaluator</option>
@@ -386,6 +410,27 @@
             <option value="admin">Admin</option>
           </select>
         </div>
+
+        @if (createEvaluatorFieldsVisible()) {
+          <div class="form-field">
+            <label for="create-user-evaluator-type">Evaluator type</label>
+            <select id="create-user-evaluator-type" formControlName="evaluatorType">
+              <option value="internal">Internal</option>
+              <option value="external">External</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="create-user-organization">Organization</label>
+            <input
+              id="create-user-organization"
+              type="text"
+              maxlength="160"
+              formControlName="organization"
+              placeholder="Required for external evaluators"
+            />
+          </div>
+        }
 
         @if (requiresDefaultPassword()) {
           <div class="form-field">

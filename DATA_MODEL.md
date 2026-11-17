@@ -6,14 +6,14 @@ The single reference for **where every record lives**. If you need data and it i
 
 ```
 users/{uid}
-  ├── notifications/{notificationId}
-  └── ideas/{ideaId}
+  └── notifications/{notificationId}
 
 ideas/{ideaId}
-  ├── versions/{versionId}          # snapshot on every (re)submission
+  ├── versions/{version}            # immutable snapshot of the superseded submission
   ├── statusHistory/{entryId}       # timeline shown to the submitter
   ├── feedback/{feedbackId}         # evaluator feedback + submitter reply
-  ├── evaluations/{evaluatorUid}   # scores (hidden from submitter)
+  ├── evaluations/{stageId_evaluatorUid} # scores (hidden from submitter)
+  ├── adjudications/{stageId}       # decision (Functions write only)
 
 assignments/{assignmentId}          # evaluator worklist
 stages/{stageId}                    # workflow configuration (admin-editable)
@@ -34,9 +34,7 @@ settings/{docId}                    # app config, e.g. settings/chat
 
 **There is no `users/{uid}/ideas`.** An idea belongs to a user through the `ownerId` field, so "my ideas" is one query, and an idea is stored once and never duplicated:
 
-```ts
-query(collection(db, 'ideas'), where('ownerId', '==', uid), orderBy('updatedAt', 'desc'))
-```
+The tracking view listens to `ideas` with `where('ownerId', '==', uid)` and sorts the results by `updatedAt` (falling back to `createdAt`) in the client. This uses the automatic single-field index and does not require a composite index.
 
 ## 2. Roles
 
@@ -70,22 +68,31 @@ Every document has `createdAt` and `updatedAt` (Firestore `Timestamp`). Field na
 | ownerId | string | user UID |
 | ownerName | string | denormalized for list views |
 | title | string | |
-| summary | string | short text for lists |
-| category | string | |
-| answers | map | answers to the dynamic form, keyed by field key |
-| formDefinitionId / formVersion | string / number | which form was used |
-| attachments | array<map> | `{ name, storagePath, contentType, size }` (keep small, max ~10) |
+| category | `health` \| `agriculture` \| `tech` \| `business` \| `marketing` \| `sales` \| `other` \| null | Set by the idea-created Function; clients cannot write it. |
+| similarityCheck | map? | Server-computed keyword/Jaccard check; scans up to 500 plans and stores up to 5 matches. |
+| automatedReview | map? | Advisory `AutomatedReviewReport`; clients may create only the fixed empty `queued` envelope. Functions own `running`, `complete` and `failed` results. |
+| problem / proposedSolution | string | Required plan text |
+| intendedBeneficiaries / plannedLocation | string | Required audience and location |
+| marketPlan | map | `{ targetMarket, alternatives, differentiation, marketValidation }` |
+| feasibilityPlan | map | `{ technicalApproach, operationalPlan, validationEvidence, assumptions, risks }` |
+| financingPlan | map | `{ currency, totalFundingNeeded, fundingSources, costs[] }`; total is the sum of costs |
+| milestones | array<map> | `{ title, targetDate, successMeasure, estimatedCost? }` (1–10 rows) |
+| aiAnalysisConsent / aiAnalysisConsentAt | boolean / Timestamp | Consent and server timestamp for advisory screening |
 | status | string | see section 4 |
-| currentStageId | string? | |
-| version | number | increments on resubmission |
-| submittedAt | Timestamp? | |
+| statusEnteredAt | Timestamp? | Server-set when the current status began; used for stage-duration reporting. Absent on legacy documents until their next status change. |
+| version | number | Starts at 1 and increments on every resubmission; legacy documents without it are read as version 1. |
+| submittedAt | Timestamp | Server timestamp for the current submitted version |
 
 Subcollections:
-- **versions/{versionId}**: `{ version, answers, title, submittedAt }`
+- **versions/{version}**: immutable prior submission snapshot containing `{ version, title, problem, proposedSolution, intendedBeneficiaries, plannedLocation, marketPlan, feasibilityPlan, financingPlan, milestones, aiAnalysisConsent, submittedAt, archivedAt }`. The owner may read snapshots; only Functions write them.
 - **statusHistory/{entryId}**: `{ from, to, stageId?, byUid, byRole, note?, at }`
-- **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: boolean, reply?: { message, at }, createdAt }`
+- **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: true, reply: null | { message, at }, createdAt }`. Functions write evaluator feedback and status history atomically; the owner may read it and add one reply. Email delivery is deferred until the team selects an outbound email provider; the in-app notification and tracking view are available meanwhile.
 - **evaluations/{stageId_evaluatorUid}**: `{ stageId, evaluatorUid, scores: { [criterionId]: number }, comments, total, submittedAt }` (submitter cannot read)
-- **adjudications/{stageId}**: `{ stageId, adjudicatorUid, decision: 'advance'|'reject'|'revise', finalScore, note, decidedAt }`
+- **adjudications/{stageId}**: `{ stageId, ideaVersion, adjudicatorUid, decision: 'advance'|'reject'|'revise', finalScore: number|null, note, decidedAt }`. Every decision requires a written note. For the adjudication stage, `finalScore` is the mean of all valid evaluator totals on the idea, or `null` when no evaluations exist. Only the `recordAdjudication` Function may create or update the decision; it writes the decision and status transition atomically. A later submission version may receive a new decision at the same stage; status history and audit logs retain the previous decisions.
+
+`similarityCheck` is `{ status: 'complete'|'failed', comparedIdeas, truncated, matches: [{ ideaId, title, jaccardSimilarity, matchingKeywords }], failureMessage }`. A check compares plan text only, requires at least two shared keywords and a Jaccard similarity of at least `0.15`, and marks scans beyond 500 documents as truncated. Names, emails and owner IDs are never included in the comparison text.
+
+The idea-created Function advances `submitted` to `ai_screening`, then to `needs_amendment` when required information is absent or to `ceda_criteria` when screening completes or fails. Every status change atomically writes `statusHistory`, an owner notification, and an `auditLogs` entry. Gemini receives only plan fields and provides advisory findings against the fixed market, technical, operations, financial, delivery and impact rubric. Web/IP checks are deferred.
 
 ### `assignments/{assignmentId}`
 `{ ideaId, stageId, evaluatorUid, status: 'pending'|'in_progress'|'done', dueAt?, assignedBy }`
@@ -102,7 +109,7 @@ Evaluator worklist: `where('evaluatorUid','==',uid).where('status','!=','done')`
 `type` is one of `text | textarea | select | multiselect | number | date | file`.
 
 ### `awards/{awardId}`
-`{ ideaId, ownerId, title, type, citation, awardedBy, awardedAt, isPublic }`
+`{ ideaId, ownerId, title, type, citation, awardedBy, awardedAt, isPublic }`. Only the admin-only `awardApprovedIdea` Function writes an award, and it atomically moves the approved idea to `awarded`. Admins and the owner may read private awards; any signed-in or unauthenticated reader may read an award marked public.
 
 ### `faqs/{faqId}` / `announcements/{announcementId}`
 - faq: `{ question, answer, category, order, contact?: { authority, email, phone } }`
@@ -119,8 +126,9 @@ Evaluator worklist: `where('evaluatorUid','==',uid).where('status','!=','done')`
 An agent toggles their own `isAvailable` from the chat console; `activeChatCount` is incremented/decremented by the console as the agent claims/closes chats. Readable by any signed-in user (to decide whether live chat is offered); writable only by the agent themselves or an admin. Like other client-maintained counters in this app, `activeChatCount` is client-trusted, not Functions-verified.
 
 ### `stats/{docId}`  (written by Functions only)
-`stats/overview`: `{ totalIdeas, byStatus: {...}, byCategory: {...}, totalUsers, avgDaysPerStage: {...}, updatedAt }`
-Dashboards read these small documents. Never scan the whole `ideas` collection to draw a chart.
+`stats/overview` contains `{ totalIdeas, totalUsers, byStatus: { [status]: count }, byCategory: { [category]: count }, avgDaysPerStage: { [status]: days }, stageDurationDaysTotal: {...}, stageVisitCounts: {...}, evaluationOutcomes: { advance, revise, reject }, chatAnalytics: ChatAnalyticsSummary, updatedAt }`. `avgDaysPerStage` includes completed visits only; the two duration maps are the accumulated duration and completed-visit count used to maintain those averages. Evaluation outcomes count recorded adjudicator decisions. `chatAnalytics` uses the `ChatAnalyticsSummary` shape, with UTC dates/hours and a 30-day `chatsPerDay` window.
+
+The idea-transition Function updates status counts and stage durations atomically with every status change; it also adjusts category counts when a category is assigned and counts a new idea on its first transition. Adjudication transitions increment the corresponding decision outcome. The admin-only `recomputeStats` Function backfills/repairs the summary, including chat analytics and historical stage durations. Run it once after deploying these reporting fields for existing records. Dashboards read only `stats/overview` for aggregate reporting; never scan `ideas` from the client to draw a chart.
 
 ### `auditLogs/{logId}`  (append-only, Functions write only)
 `{ actorUid, actorRole, action, entityType, entityId, summary, at }`
@@ -128,21 +136,32 @@ Dashboards read these small documents. Never scan the whole `ideas` collection t
 
 ## 4. Idea status values
 
-```
-draft -> submitted -> under_review -> feedback_requested -> revised -> under_review
-                                   -> approved -> awarded
-                                   -> rejected
-```
-`draft | submitted | under_review | feedback_requested | revised | approved | rejected | awarded`
+The canonical idea statuses, in sync with `IDEA_STATUSES` in `src/app/shared/workflow/idea-workflow.ts`, are:
 
-Status changes go through a Cloud Function (or a rules-restricted write), which also writes `statusHistory`, a notification and an audit log entry. **Do not set `status` freely from components.**
+```text
+submitted
+ai_screening
+needs_amendment
+ceda_criteria
+human_review
+adjudication
+approved
+awarded
+rejected
+```
+
+Labels, help text, health colours, and valid transitions are defined in `idea-workflow.ts`; do not introduce additional canonical status values here.
+
+Legacy idea statuses are normalized when read: `draft` -> `submitted`, `under-review` / `under_review` -> `human_review`, `needs-revision` / `needs_revision` / `feedback_requested` -> `needs_amendment`, `revised` -> `ai_screening`, `accepted` -> `approved`, and `declined` -> `rejected`. Drafts in the submission form are saved locally and are not new Firestore ideas; a newly created idea starts as `submitted`.
+
+Status changes go through a Cloud Function (or a rules-restricted write), which also writes `statusHistory`, a notification and an audit log entry. Evaluator change requests require a written note and create feedback; owner resubmissions archive the prior version, increment `version`, and restart screening. **Do not set `status` freely from components.**
 
 ## 5. Who reads and writes what
 
 | Collection | Owner feature | Client can write | Client can read |
 |---|---|---|---|
 | users | account | own profile fields (not `role`) | own doc; admin all |
-| ideas (+ versions, feedback) | submissions | owner: create/edit while draft or feedback_requested | owner, evaluators, adjudicators, admin |
+| ideas (+ versions, feedback) | submissions | owner: create/edit while needs_amendment | owner, evaluators, adjudicators, admin |
 | evaluations, adjudications | evaluation | evaluator / adjudicator | evaluators, adjudicators, admin (not submitter) |
 | statusHistory | tracking | no (Functions) | owner, staff |
 | assignments, stages, criteriaSets | evaluation / admin | admin | assigned evaluator, admin |
@@ -151,7 +170,7 @@ Status changes go through a Cloud Function (or a rules-restricted write), which 
 | agentPresence | chat | the agent themselves; admin | everyone signed in |
 | stats | reporting | no | admin, adjudicator |
 | auditLogs | core | no | admin |
-| awards | evaluation | admin | owner; public if `isPublic` |
+| awards | evaluation | no (admin Function) | admin, owner; public if `isPublic` |
 
 ## 6. Storage paths (Firebase Storage)
 
