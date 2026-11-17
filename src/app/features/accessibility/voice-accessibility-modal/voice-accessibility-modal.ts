@@ -17,8 +17,11 @@ export class VoiceAccessibilityModalComponent {
       if (this.open()) {
         // Pass your API key or fetch an ephemeral token from your backend here
         void this.live.startSession((environment as { geminiApiKey?: string }).geminiApiKey ?? '');
+        console.log('Starting Gemini Live session with API key:', (environment as { geminiApiKey?: string }).geminiApiKey ?? '');
+        
       } else {
         void this.live.stopSession();
+        console.log('Stopping Gemini Live session');
       }
     });
   }

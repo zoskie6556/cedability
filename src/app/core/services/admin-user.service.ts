@@ -3,10 +3,20 @@ import { collection, Firestore, getDocs, orderBy, query, Timestamp } from '@angu
 import { Functions, httpsCallable } from '@angular/fire/functions';
 import type { EvaluatorType } from '../../shared/models/idea-evaluation.model';
 import { AdminUser, AdminUserRole } from '../../features/admin/models/admin-user.model';
+interface CreatedUserResult {
+  uid: string;
+  email: string;
+} 
+import {
+  Auth,
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from '@angular/fire/auth';
 
 interface CreateUserRequest {
-  displayName: string;
+  fullName: string;
   email: string;
+  password: string;
   phone?: string;
   role: AdminUserRole;
   evaluatorType?: EvaluatorType;
@@ -27,6 +37,7 @@ interface ToggleUserRequest {
 export class AdminUserService {
   private readonly firestore = inject(Firestore);
   private readonly functions = inject(Functions);
+  private readonly auth = inject(Auth);
 
   async loadUsers(): Promise<AdminUser[]> {
     console.log('[AdminUserService] loading users from Firestore');
@@ -48,14 +59,35 @@ export class AdminUserService {
     }
   }
 
-  async createUser(input: CreateUserRequest): Promise<{ uid: string; email: string; link: string }> {
-    const callable = httpsCallable<CreateUserRequest, { uid: string; email: string; link: string }>(
-      this.functions,
-      'createUserAccount',
+
+
+  // async createUser(input: CreateUserRequest): Promise<{ uid: string; email: string; link: string }> {
+  //   const callable = httpsCallable<CreateUserRequest, { uid: string; email: string; link: string }>(
+  //     this.functions,
+  //     'createUserAccount',
+  //   );
+
+  //   const response = await callable(input);
+  //   return response.data;
+  // }
+  async createUser(input: CreateUserRequest): Promise<CreatedUserResult> {
+    const email = input.email.trim();
+    const fullName = input.fullName.trim();
+
+    const { user } = await createUserWithEmailAndPassword(
+      this.auth,
+      email,
+      input.password,
     );
 
-    const response = await callable(input);
-    return response.data;
+    if (fullName) {
+      await updateProfile(user, { displayName: fullName });
+    }
+
+    return {
+      uid: user.uid,
+      email: user.email ?? email,
+    };
   }
 
   async updateRole(uid: string, role: AdminUserRole): Promise<void> {

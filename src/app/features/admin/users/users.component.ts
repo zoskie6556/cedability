@@ -1,21 +1,45 @@
+import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   OnInit,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { collection, Firestore, getCountFromServer, query, where } from '@angular/fire/firestore';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
 import { AdminUserService } from '../../../core/services/admin-user.service';
+import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { AdminUser, AdminUserRole } from '../models/admin-user.model';
 import type { EvaluatorType } from '../../../shared/models/idea-evaluation.model';
 
+export type UserRole = AdminUserRole;
+export type UserStatus = 'active' | 'disabled';
+
+export interface UserSubscriptionInfo {
+  planName: string;
+  status: string;
+  renewalDate: string;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  phone?: string | null;
+  role: UserRole;
+  defaultPassword?: string;
+  requirePasswordChange?: boolean;
+}
+
+export const DEFAULT_STAFF_PASSWORD = 'AdminOps@Ability';
+
 @Component({
   selector: 'app-admin-users',
-  imports: [ReactiveFormsModule, IdeaLoaderComponent],
+  imports: [CommonModule, ReactiveFormsModule, IdeaLoaderComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,56 +47,198 @@ import type { EvaluatorType } from '../../../shared/models/idea-evaluation.model
 export class UsersComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly adminUserService = inject(AdminUserService);
+  private readonly firestore = inject(Firestore);
   private readonly toastService = inject(ToastService);
 
   readonly users = signal<AdminUser[]>([]);
-  readonly isLoading = signal(true);
-  readonly searchTerm = signal('');
+  readonly isLoading = signal<boolean>(false);
+  readonly isSubmitting = signal<boolean>(false);
+  readonly errorMessage = signal<string | null>(null);
+  readonly searchTerm = signal<string>('');
   readonly roleFilter = signal<'all' | AdminUserRole>('all');
+  readonly creatingUser = signal<boolean>(false);
   readonly createEvaluatorFieldsVisible = signal(false);
 
-  readonly filteredUsers = computed(() => {
-    const query = this.searchTerm().trim().toLowerCase();
-    const activeRole = this.roleFilter();
+  readonly pageSize = 10;
+  readonly currentPage = signal<number>(1);
+  readonly selectedUserId = signal<string | null>(null);
+  readonly isCreateModalOpen = signal<boolean>(false);
+  readonly isEditingUser = signal<boolean>(false);
 
-    return this.users().filter((user) => {
-      const matchesRole = activeRole === 'all' || user.role === activeRole;
-      const matchesQuery =
-        !query ||
-        user.name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query);
+  // Cache of "Ideas Shared" counts keyed by userId
+  private readonly ideasCountCache = signal<Record<string, number>>({});
+  readonly isLoadingIdeasCount = signal<boolean>(false);
 
-      return matchesRole && matchesQuery;
-    });
-  });
+  // Placeholder subscription state keyed by userId (not pulled from DB yet)
+  private readonly subscriptionOverrides = signal<Record<string, UserSubscriptionInfo>>({});
 
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
     email: ['', [Validators.required, Validators.email]],
     phone: ['', Validators.pattern(/^(?:\+[1-9]\d{1,14})?$/)],
     role: ['submitter' as AdminUserRole, Validators.required],
+    defaultPassword: [''],
     evaluatorType: ['internal' as EvaluatorType],
     organization: [''],
   });
+
+  readonly editUserForm = this.fb.nonNullable.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
+    phone: [''],
+    role: ['submitter' as UserRole, [Validators.required]],
+    subscriptionPlan: ['Standard'],
+    subscriptionStatus: ['Not synced'],
+    subscriptionRenewal: ['—'],
+  });
+
+  private readonly selectedFormRole = toSignal(this.form.controls.role.valueChanges, {
+    initialValue: this.form.controls.role.value,
+  });
+
+  readonly requiresDefaultPassword = computed(() => {
+    const role = this.selectedFormRole();
+    return !!role && role !== 'submitter';
+  });
+
+  readonly filteredUsers = computed(() => {
+    const queryText = this.searchTerm().trim().toLowerCase();
+    const role = this.roleFilter();
+
+    return this.users().filter((user) => {
+      const matchesRole = role === 'all' || user.role === role;
+      const matchesQuery =
+        !queryText ||
+        (user.name ?? '').toLowerCase().includes(queryText) ||
+        (user.email ?? '').toLowerCase().includes(queryText);
+
+      return matchesRole && matchesQuery;
+    });
+  });
+
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filteredUsers().length / this.pageSize)),
+  );
+
+  readonly paginatedUsers = computed(() => {
+    const page = Math.min(this.currentPage(), this.totalPages());
+    const start = (page - 1) * this.pageSize;
+    return this.filteredUsers().slice(start, start + this.pageSize);
+  });
+
+  readonly pageNumbers = computed(() =>
+    Array.from({ length: this.totalPages() }, (_, index) => index + 1)
+  );
+
+  readonly selectedUser = computed(() => {
+    const id = this.selectedUserId();
+    if (!id) return null;
+    return this.users().find((user) => user.id === id) ?? null;
+  });
+
+  readonly selectedUserIdeasCount = computed<number | null>(() => {
+    const user = this.selectedUser();
+    if (!user) return null;
+    const count = this.ideasCountCache()[user.id];
+    return typeof count === 'number' ? count : null;
+  });
+
+  readonly selectedUserSubscription = computed<UserSubscriptionInfo>(() => {
+    const user = this.selectedUser();
+    if (!user) {
+      return { planName: '—', status: 'Not synced', renewalDate: '—' };
+    }
+    return (
+      this.subscriptionOverrides()[user.id] ?? {
+        planName: 'None',
+        status: 'Pending DB integration',
+        renewalDate: '—',
+      }
+    );
+  });
+
+  constructor() {
+    effect(() => {
+      const needsDefault = this.requiresDefaultPassword();
+      const passwordControl = this.form.controls.defaultPassword;
+
+      if (needsDefault) {
+        if (!passwordControl.value) {
+          passwordControl.setValue(DEFAULT_STAFF_PASSWORD);
+        }
+      } else {
+        passwordControl.setValue('');
+      }
+    });
+
+    // Whenever a user modal opens, load the "Ideas Shared" count where ownerId == user.id
+    effect(() => {
+      const user = this.selectedUser();
+      if (user) {
+        void this.fetchIdeasCountForUser(user.id);
+      }
+    });
+  }
 
   ngOnInit(): void {
     void this.loadUsers();
   }
 
-  focusCreateForm(): void {
-    this.form.controls.name.markAsTouched();
-    this.form.controls.name.markAsDirty();
+  async loadUsers(): Promise<void> {
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      const loadedUsers = await this.adminUserService.loadUsers();
+      this.users.set(loadedUsers);
+    } catch (error) {
+      console.error('[UsersComponent] failed to load users', error);
+      this.errorMessage.set('Failed to load users. Please try again.');
+      this.toastService.error('The user directory could not be loaded.');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  async fetchIdeasCountForUser(ownerId: string, forceRefresh = false): Promise<void> {
+    if (!ownerId) return;
+    if (!forceRefresh && typeof this.ideasCountCache()[ownerId] === 'number') {
+      return;
+    }
+
+    this.isLoadingIdeasCount.set(true);
+    try {
+      const ideasQuery = query(
+        collection(this.firestore, 'ideas'),
+        where('ownerId', '==', ownerId)
+      );
+      const snapshot = await getCountFromServer(ideasQuery);
+      const count = snapshot.data().count;
+
+      this.ideasCountCache.update((cache) => ({
+        ...cache,
+        [ownerId]: count,
+      }));
+    } catch (error) {
+      console.error('[UsersComponent] failed to count ideas for ownerId:', ownerId, error);
+      this.ideasCountCache.update((cache) => ({
+        ...cache,
+        [ownerId]: 0,
+      }));
+    } finally {
+      this.isLoadingIdeasCount.set(false);
+    }
   }
 
   onSearchChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.searchTerm.set(target?.value ?? '');
+    const value = (event.target as HTMLInputElement).value;
+    this.searchTerm.set(value);
+    this.currentPage.set(1);
   }
 
   onRoleFilterChange(event: Event): void {
-    const target = event.target as HTMLSelectElement | null;
-    const value = target?.value ?? 'all';
+    const value = (event.target as HTMLSelectElement).value;
     this.roleFilter.set(value === 'all' ? 'all' : (value as AdminUserRole));
+    this.currentPage.set(1);
   }
 
   onCreateRoleChange(event: Event): void {
@@ -80,128 +246,303 @@ export class UsersComponent implements OnInit {
     this.createEvaluatorFieldsVisible.set(target?.value === 'evaluator');
   }
 
-  async createUser(): Promise<void> {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      this.toastService.error('Please correct the highlighted account details.');
+  formatRole(role: AdminUserRole): string {
+    switch (role) {
+      case 'submitter':
+        return 'User';
+      case 'agent':
+        return 'Support team';
+      case 'evaluator':
+        return 'Evaluator';
+      case 'adjudicator':
+        return 'Adjudicator';
+      case 'admin':
+        return 'Admin';
+      default:
+        return role;
+    }
+  }
+
+  applyDefaultPassword(): void {
+    this.form.controls.defaultPassword.setValue(DEFAULT_STAFF_PASSWORD);
+  }
+
+  openCreateModal(): void {
+    this.errorMessage.set(null);
+    this.form.reset({
+      name: '',
+      email: '',
+      phone: '',
+      role: 'submitter',
+      defaultPassword: '',
+      evaluatorType: 'internal',
+      organization: '',
+    });
+    this.createEvaluatorFieldsVisible.set(false);
+    this.isCreateModalOpen.set(true);
+  }
+
+  closeCreateModal(): void {
+    this.isCreateModalOpen.set(false);
+  }
+
+  openUserModal(user: AdminUser): void {
+    this.isEditingUser.set(false);
+    this.populateEditForm(user);
+    this.selectedUserId.set(user.id);
+  }
+
+  closeUserModal(): void {
+    this.isEditingUser.set(false);
+    this.selectedUserId.set(null);
+  }
+
+  startEditingUser(): void {
+    const user = this.selectedUser();
+    if (!user) return;
+    this.populateEditForm(user);
+    this.isEditingUser.set(true);
+  }
+
+  cancelEditingUser(): void {
+    const user = this.selectedUser();
+    if (user) {
+      this.populateEditForm(user);
+    }
+    this.isEditingUser.set(false);
+  }
+
+  private populateEditForm(user: AdminUser): void {
+    const sub =
+      this.subscriptionOverrides()[user.id] ?? {
+        planName: 'None',
+        status: 'Pending DB integration',
+        renewalDate: '—',
+      };
+
+    this.editUserForm.reset({
+      name: user.name ?? '',
+      phone: user.phone ?? '',
+      role: user.role,
+      subscriptionPlan: sub.planName,
+      subscriptionStatus: sub.status,
+      subscriptionRenewal: sub.renewalDate,
+    });
+  }
+
+  async saveUserInfo(): Promise<void> {
+    const user = this.selectedUser();
+    if (!user || this.editUserForm.invalid || this.isSubmitting()) {
+      this.editUserForm.markAllAsTouched();
       return;
     }
 
-    const { name, email, phone, role, evaluatorType, organization } = this.form.getRawValue();
-    if (role === 'evaluator' && evaluatorType === 'external' && !organization.trim()) {
+    const raw = this.editUserForm.getRawValue();
+    const updatedName = raw.name.trim();
+    const updatedPhone = raw.phone.trim() || undefined;
+    const updatedRole = raw.role;
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      // Save placeholder subscription fields locally until DB integration is wired
+      this.subscriptionOverrides.update((subs) => ({
+        ...subs,
+        [user.id]: {
+          planName: raw.subscriptionPlan.trim() || 'None',
+          status: raw.subscriptionStatus.trim() || 'Pending DB integration',
+          renewalDate: raw.subscriptionRenewal.trim() || '—',
+        },
+      }));
+
+      // Update role via service if changed
+      if (updatedRole !== user.role) {
+        await this.adminUserService.updateRole(user.id, updatedRole);
+      }
+
+      // Update local user list state for name, phone, and role
+      this.users.update((list) =>
+        list.map((item) =>
+          item.id === user.id
+            ? {
+                ...item,
+                name: updatedName,
+                phone: updatedPhone,
+                role: updatedRole,
+              }
+            : item
+        )
+      );
+
+      this.isEditingUser.set(false);
+      this.toastService.success('User information was updated.');
+    } catch (error) {
+      console.error('[UsersComponent] failed to update user info', error);
+      this.errorMessage.set('Failed to update user information.');
+      this.toastService.error('Failed to update user information.');
+    } finally {
+      this.isSubmitting.set(false);
+    }
+  }
+
+  async createUser(): Promise<void> {
+    if (this.form.invalid || this.creatingUser()) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.form.getRawValue();
+    const trimmedName = raw.name.trim();
+    const trimmedEmail = raw.email.trim();
+    const trimmedPhone = raw.phone.trim();
+    const isNonUserRole = raw.role !== 'submitter';
+    const resolvedPassword =
+      raw.defaultPassword.trim() || (isNonUserRole ? DEFAULT_STAFF_PASSWORD : '');
+    if (raw.role === 'evaluator' && raw.evaluatorType === 'external' && !raw.organization.trim()) {
       this.form.controls.organization.markAsTouched();
+      this.errorMessage.set('Enter the external evaluator organization.');
       this.toastService.error('Enter the external evaluator organization.');
       return;
     }
 
+    this.creatingUser.set(true);
+    this.errorMessage.set(null);
+
     try {
-      this.isLoading.set(true);
       await this.adminUserService.createUser({
-        displayName: name,
-        email,
-        phone: phone || undefined,
-        role,
-        evaluatorType: role === 'evaluator' ? evaluatorType : undefined,
-        organization: role === 'evaluator' ? organization.trim() || undefined : undefined,
+        fullName: trimmedName,
+        email: trimmedEmail,
+        password: resolvedPassword,
+        ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+        role: raw.role,
+        evaluatorType: raw.role === 'evaluator' ? raw.evaluatorType : undefined,
+        organization:
+          raw.role === 'evaluator' ? raw.organization.trim() || undefined : undefined,
       });
+
+      await this.loadUsers();
+      this.closeCreateModal();
       this.form.reset({
-        role: 'submitter' as AdminUserRole,
-        evaluatorType: 'internal' as EvaluatorType,
+        name: '',
+        email: '',
+        phone: '',
+        role: 'submitter',
+        defaultPassword: '',
+        evaluatorType: 'internal',
         organization: '',
       });
       this.createEvaluatorFieldsVisible.set(false);
-      await this.loadUsers();
-      this.toastService.success(`Created account for ${email}.`);
+      this.toastService.success(`Created account for ${trimmedEmail}.`);
     } catch (error) {
-      this.toastService.error(this.extractMessage(error, 'Unable to create the account.'));
+      console.error('[UsersComponent] failed to create user', error);
+      this.errorMessage.set('Could not create user. Please check the details and try again.');
+      this.toastService.error('Could not create user. Please check the details and try again.');
     } finally {
-      this.isLoading.set(false);
+      this.creatingUser.set(false);
+    }
+  }
+
+  async onSubmitCreateUser(): Promise<void> {
+    await this.createUser();
+  }
+
+  async changeUserRole(event: Event, user: AdminUser): Promise<void> {
+    const nextRole = (event.target as HTMLSelectElement).value as UserRole;
+    if (nextRole === user.role) {
+      return;
+    }
+
+    const previousRole = user.role;
+    this.users.update((list) =>
+      list.map((item) => (item.id === user.id ? { ...item, role: nextRole } : item))
+    );
+
+    try {
+      await this.adminUserService.updateRole(user.id, nextRole);
+      this.toastService.success(`Updated ${user.name} to ${this.formatRole(nextRole)}.`);
+    } catch (error) {
+      console.error('[UsersComponent] failed to update role', error);
+      this.users.update((list) =>
+        list.map((item) => (item.id === user.id ? { ...item, role: previousRole } : item))
+      );
+      this.errorMessage.set('Failed to update user role.');
+      this.toastService.error('Failed to update user role.');
     }
   }
 
   async toggleStatus(user: AdminUser): Promise<void> {
-    try {
-      const nextStatus: AdminUser['status'] = user.status === 'active' ? 'disabled' : 'active';
-      await this.adminUserService.toggleStatus(user.id, nextStatus === 'active');
-      await this.loadUsers();
-      this.toastService.success(`User ${user.name} is now ${nextStatus}.`);
-    } catch (error) {
-      this.toastService.error(this.extractMessage(error, 'Unable to update the user status.'));
-    }
-  }
+    const nextStatus: UserStatus = user.status === 'active' ? 'disabled' : 'active';
+    const nextIsActive = nextStatus === 'active';
+    const previousStatus = user.status;
 
-  changeUserRole(event: Event, user: AdminUser): void {
-    const target = event.target as HTMLSelectElement | null;
-    const role = target?.value as AdminUserRole | undefined;
-    if (role && role !== user.role) {
-      void this.updateRole(user, role);
-    }
-  }
-
-  async updateRole(user: AdminUser, role: AdminUserRole): Promise<void> {
-    if (role === user.role) {
-      return;
-    }
+    this.users.update((list) =>
+      list.map((item) => (item.id === user.id ? { ...item, status: nextStatus } : item))
+    );
 
     try {
-      await this.adminUserService.updateRole(user.id, role);
-      await this.loadUsers();
-      this.toastService.success(`Updated ${user.name} to ${this.formatRole(role)}.`);
+      await this.adminUserService.toggleStatus(user.id, nextIsActive);
+      this.toastService.success(
+        `User ${user.name} is now ${nextStatus}.`,
+      );
     } catch (error) {
-      this.toastService.error(this.extractMessage(error, 'Unable to update the user role.'));
-      await this.loadUsers();
+      console.error('[UsersComponent] failed to toggle status', error);
+      this.users.update((list) =>
+        list.map((item) => (item.id === user.id ? { ...item, status: previousStatus } : item))
+      );
+      this.errorMessage.set('Failed to update user status.');
+      this.toastService.error('Failed to update user status.');
     }
   }
 
   async resendInvite(user: AdminUser): Promise<void> {
+    this.errorMessage.set(null);
+
     try {
       await this.adminUserService.resendInvite(user.id);
       this.toastService.success(`Invite email sent to ${user.email}.`);
     } catch (error) {
-      this.toastService.error(this.extractMessage(error, 'Unable to resend the invite.'));
+      console.error('[UsersComponent] failed to resend invite', error);
+      this.errorMessage.set('Failed to resend invite.');
+      this.toastService.error('Failed to resend invite.');
     }
   }
 
   async deleteUser(user: AdminUser): Promise<void> {
+    this.errorMessage.set(null);
+
     try {
       await this.adminUserService.deleteUser(user.id);
-      await this.loadUsers();
+      this.users.update((list) => list.filter((item) => item.id !== user.id));
       this.toastService.success(`Deleted ${user.name}.`);
+
+      if (this.selectedUserId() === user.id) {
+        this.closeUserModal();
+      }
+      if (this.currentPage() > this.totalPages()) {
+        this.currentPage.set(this.totalPages());
+      }
     } catch (error) {
-      this.toastService.error(this.extractMessage(error, 'Unable to delete the user.'));
+      console.error('[UsersComponent] failed to delete user', error);
+      this.errorMessage.set('Failed to delete user.');
+      this.toastService.error('Failed to delete user.');
     }
   }
 
-  formatRole(role: AdminUserRole): string {
-    return role === 'agent'
-      ? 'Support Team'
-      : role.replace(/(^\w|_\w)/g, (match) => match.replace('_', ' ').toUpperCase());
+  deleteUserFromModal(user: AdminUser): void {
+    void this.deleteUser(user);
   }
 
-  private async loadUsers(): Promise<void> {
-    console.log('[UsersComponent] attempting to load users');
-
-    try {
-      const users = await this.adminUserService.loadUsers();
-      console.log('[UsersComponent] received users from service', users);
-      this.users.set(users);
-    } catch (error) {
-      console.error('[UsersComponent] failed to load users', error);
-      this.toastService.error(
-        this.extractMessage(error, 'The user directory could not be loaded.'),
-      );
-      this.users.set([]);
-    } finally {
-      // The fix: without this the loader never goes away and the table never renders.
-      this.isLoading.set(false);
-    }
+  goToPage(page: number): void {
+    const clamped = Math.min(Math.max(1, page), this.totalPages());
+    this.currentPage.set(clamped);
   }
 
-  private extractMessage(error: unknown, fallback: string): string {
-    if (error instanceof Error && error.message) {
-      return error.message;
-    }
+  prevPage(): void {
+    this.goToPage(this.currentPage() - 1);
+  }
 
-    return fallback;
+  nextPage(): void {
+    this.goToPage(this.currentPage() + 1);
   }
 }

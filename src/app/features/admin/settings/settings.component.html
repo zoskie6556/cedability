@@ -1,15 +1,229 @@
 <section class="page-shell">
   <p class="eyebrow">System</p>
   <h2>Settings</h2>
-  <p>Adjust operational defaults, chat schedules, and platform configuration.</p>
+  <p class="subtitle">Adjust operational defaults, chat schedules, moderation rules, and accessibility preferences.</p>
 
-  <div class="settings-list">
-    <article class="setting" *ngFor="let item of settings">
-      <div>
-        <h3>{{ item.name }}</h3>
-        <p>{{ item.description }}</p>
-      </div>
-      <span class="value">{{ item.value }}</span>
-    </article>
+  <div class="tabs" role="tablist" aria-label="Settings sections">
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.active]="activeSection() === 'chat'"
+      [attr.aria-selected]="activeSection() === 'chat'"
+      (click)="selectSection('chat')"
+    >
+      Live Chat &amp; Moderation
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.active]="activeSection() === 'orb'"
+      [attr.aria-selected]="activeSection() === 'orb'"
+      (click)="selectSection('orb')"
+    >
+      Accessibility Orb <span class="badge-draft">Local draft</span>
+    </button>
   </div>
+
+  @if (loading()) {
+    <app-idea-loader label="Loading system settings" />
+  } @else if (activeSection() === 'chat') {
+    <form [formGroup]="chatForm" (ngSubmit)="saveChatSettings()" class="settings-stack">
+      <!-- 1. Active Schedule & Capacity -->
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Active Chat Hours &amp; Capacity</h3>
+            <p>Controls when live chat is open to users and how many sessions each consultant can hold.</p>
+          </div>
+          <label class="check">
+            <input type="checkbox" formControlName="isEnabled" />
+            <span>Live chat enabled</span>
+          </label>
+        </div>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Opening time</span>
+            <input type="time" formControlName="openTime" />
+          </label>
+
+          <label class="field">
+            <span>Closing time</span>
+            <input type="time" formControlName="closeTime" />
+          </label>
+
+          <label class="field">
+            <span>Timezone</span>
+            <input type="text" formControlName="timezone" placeholder="Africa/Gaborone" />
+          </label>
+
+          <label class="field">
+            <span>Max concurrent chats / agent</span>
+            <input type="number" min="1" max="20" formControlName="maxConcurrentChats" />
+          </label>
+        </div>
+
+        <div class="days-block">
+          <span class="field-label">Active working days</span>
+          <div class="day-pills" role="group" aria-label="Active working days">
+            @for (day of days; track day.key) {
+              <button
+                type="button"
+                class="day-pill"
+                [class.selected]="isDaySelected(day.key)"
+                [attr.aria-pressed]="isDaySelected(day.key)"
+                (click)="toggleDay(day.key)"
+              >
+                {{ day.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </article>
+
+      <!-- 2. Vulgar Language Screening & Auto-Ban -->
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Vulgar Language Screening &amp; Ban Policy</h3>
+            <p>Automatically screen messages for profanity or abusive terms and restrict repeat offenders.</p>
+          </div>
+          <label class="check">
+            <input type="checkbox" formControlName="profanityEnabled" />
+            <span>Enable screening</span>
+          </label>
+        </div>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Moderation action</span>
+            <select formControlName="profanityAction">
+              <option value="warn_and_ban">Warn &amp; auto-ban on repeat strikes</option>
+              <option value="block">Block message immediately</option>
+              <option value="mask">Mask vulgar words (***)</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Strikes before auto-ban</span>
+            <input type="number" min="1" max="10" formControlName="profanityStrikeLimit" />
+          </label>
+
+          <label class="field">
+            <span>Ban duration (hours, 0 = permanent)</span>
+            <input type="number" min="0" max="8760" formControlName="banDurationHours" />
+          </label>
+        </div>
+
+        <label class="field full-width">
+          <span>Custom blocked words or phrases (comma-separated)</span>
+          <textarea
+            rows="3"
+            formControlName="blockedTermsRaw"
+            placeholder="Add extra English or Setswana terms to screen..."
+          ></textarea>
+        </label>
+      </article>
+
+      <!-- 3. Waiting Period & Automatic Replies -->
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Waiting Period &amp; Automatic Replies</h3>
+            <p>Send automated responses when consultants are busy or when users message outside working hours.</p>
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Waiting period before auto-reply (seconds)</span>
+            <input type="number" min="5" max="600" formControlName="autoReplyWaitSeconds" />
+          </label>
+        </div>
+
+        <div class="field-grid two-col">
+          <label class="field">
+            <span>Queue waiting auto-reply</span>
+            <textarea rows="3" formControlName="waitingAutoReply"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Offline hours auto-reply</span>
+            <textarea rows="3" formControlName="offlineAutoReply"></textarea>
+          </label>
+        </div>
+      </article>
+
+      <div class="form-actions">
+        <button type="submit" class="primary-button" [disabled]="savingChat()">
+          {{ savingChat() ? 'Saving settings...' : 'Save chat settings' }}
+        </button>
+      </div>
+    </form>
+  } @else {
+    <!-- Accessibility Orb Settings (UI Only - No DB Submit) -->
+    <form [formGroup]="orbForm" (ngSubmit)="previewOrbLocal()" class="settings-stack">
+      <div class="local-notice" role="note">
+        <strong>UI Preview Mode:</strong> Changes here are kept locally in browser state and will not be written to
+        Firestore until the Gemini Realtime API criteria pipeline is finalized.
+      </div>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Accessibility Voice Orb (CEDAbility Assistant)</h3>
+            <p>Configure default voice guidance behavior for users navigating the platform.</p>
+          </div>
+          <label class="check">
+            <input type="checkbox" formControlName="orbEnabled" />
+            <span>Show accessibility orb</span>
+          </label>
+        </div>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Default prompt language</span>
+            <select formControlName="defaultLanguage">
+              <option value="en">English (Use English)</option>
+              <option value="tn">Setswana (Dirisa Setswana)</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Assistance scope</span>
+            <select formControlName="assistScope">
+              <option value="navigation_only">Page navigation only</option>
+              <option value="navigation_and_ideas">Navigation &amp; idea submission help</option>
+              <option value="full">Full guided assistant</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Voice playback speed ({{ orbForm.controls.voiceSpeed.value }}x)</span>
+            <input type="range" min="0.75" max="1.5" step="0.05" formControlName="voiceSpeed" />
+          </label>
+        </div>
+
+        <label class="check standalone-check">
+          <input type="checkbox" formControlName="autoGreetOnLanding" />
+          <span>Offer audio greeting prompt on first visit</span>
+        </label>
+
+        <label class="field full-width">
+          <span>Gemini Realtime API Guidance Criteria (Draft Notes)</span>
+          <textarea
+            rows="4"
+            formControlName="criteriaNotes"
+            placeholder="Describe how the voice orb should assist users..."
+          ></textarea>
+        </label>
+      </article>
+
+      <div class="form-actions">
+        <button type="submit" class="secondary-button">Apply local preview</button>
+      </div>
+    </form>
+  }
 </section>

@@ -1,171 +1,478 @@
-<section class="page-header">
-  <div>
-    <p class="eyebrow">Administration</p>
-    <h2>User management</h2>
-  </div>
-  <button type="button" class="primary-button" (click)="focusCreateForm()">Create account</button>
-</section>
+<div class="users-page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Users</h1>
+      <p class="page-subtitle">Manage platform accounts, roles, access status, and activity.</p>
+    </div>
 
-<div class="toolbar">
-  <label class="search-field" aria-label="Search users">
-    <span aria-hidden="true">⌕</span>
+    <button type="button" class="primary-button" (click)="openCreateModal()">
+      + Add User
+    </button>
+  </div>
+
+  @if (errorMessage(); as err) {
+    <div class="alert-banner" role="alert">
+      <span>{{ err }}</span>
+      <button type="button" class="alert-dismiss" (click)="errorMessage.set(null)">
+        Dismiss
+      </button>
+    </div>
+  }
+
+  <div class="toolbar">
     <input
       type="search"
-      placeholder="Search by name or email"
+      class="search-input"
+      placeholder="Search by name or email..."
       [value]="searchTerm()"
       (input)="onSearchChange($event)"
+      aria-label="Search users"
     />
-  </label>
 
-  <select
-    class="chip-select"
-    aria-label="Filter by role"
-    [value]="roleFilter()"
-    (change)="onRoleFilterChange($event)"
-  >
-    <option value="all">All roles</option>
-    <option value="admin">Admin</option>
-    <option value="evaluator">Evaluator</option>
-    <option value="adjudicator">Adjudicator</option>
-    <option value="agent">Support team</option>
-    <option value="submitter">Submitter</option>
-  </select>
+    <select
+      class="role-filter"
+      [value]="roleFilter()"
+      (change)="onRoleFilterChange($event)"
+      aria-label="Filter by role"
+    >
+      <option value="all">All roles</option>
+      <option value="submitter">User</option>
+      <option value="agent">Support team</option>
+      <option value="evaluator">Evaluator</option>
+      <option value="adjudicator">Adjudicator</option>
+      <option value="admin">Admin</option>
+    </select>
+  </div>
+
+  @if (isLoading()) {
+    <div class="loading-state">
+      <app-idea-loader />
+      <span>Loading users...</span>
+    </div>
+  } @else if (paginatedUsers().length === 0) {
+    <div class="empty-state">
+      <p>No users match the current search or filter.</p>
+    </div>
+  } @else {
+    <div class="users-list">
+      @for (user of paginatedUsers(); track user.id) {
+        <div class="user-card" (click)="openUserModal(user)">
+          <div class="user-card-main">
+            <div class="user-avatar">
+              {{ (user.name || user.email || '?').charAt(0).toUpperCase() }}
+            </div>
+
+            <div class="user-meta">
+              <div class="user-title-row">
+                <span class="user-name">{{ user.name || 'Unnamed User' }}</span>
+                <span class="role-badge">{{ formatRole(user.role) }}</span>
+                <span
+                  class="status-badge"
+                  [class.is-active]="user.status === 'active'"
+                  [class.is-disabled]="user.status !== 'active'"
+                >
+                  {{ user.status === 'active' ? 'Active' : 'Disabled' }}
+                </span>
+              </div>
+
+              <div class="user-email">{{ user.email }}</div>
+              @if (user.phone) {
+                <div class="user-phone">{{ user.phone }}</div>
+              }
+              @if (user.evaluatorType) {
+                <div class="user-phone">Evaluator type: {{ user.evaluatorType }}</div>
+              }
+              @if (user.organization) {
+                <div class="user-phone">Organization: {{ user.organization }}</div>
+              }
+            </div>
+          </div>
+
+          <div class="user-card-actions" (click)="$event.stopPropagation()">
+            <select
+              class="inline-role-select"
+              [value]="user.role"
+              (change)="changeUserRole($event, user)"
+              aria-label="Change role for {{ user.name || user.email }}"
+            >
+              <option value="submitter">User</option>
+              <option value="agent">Support team</option>
+              <option value="evaluator">Evaluator</option>
+              <option value="adjudicator">Adjudicator</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            <button
+              type="button"
+              class="row-button"
+              (click)="toggleStatus(user)"
+            >
+              {{ user.status === 'active' ? 'Disable' : 'Enable' }}
+            </button>
+
+            <button
+              type="button"
+              class="row-button"
+              (click)="resendInvite(user)"
+            >
+              Resend invite
+            </button>
+
+            <button
+              type="button"
+              class="row-button danger"
+              (click)="deleteUser(user)"
+              aria-label="Delete {{ user.name || user.email }}"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="pagination-bar">
+      <div class="pagination-summary">
+        Page {{ currentPage() }} of {{ totalPages() }} · Showing {{ paginatedUsers().length }} of
+        {{ filteredUsers().length }}
+      </div>
+
+      <div class="pagination-controls">
+        <button
+          type="button"
+          class="page-button"
+          [disabled]="currentPage() <= 1"
+          (click)="prevPage()"
+        >
+          Previous
+        </button>
+
+        @for (page of pageNumbers(); track page) {
+          <button
+            type="button"
+            class="page-button"
+            [class.is-current]="page === currentPage()"
+            (click)="goToPage(page)"
+          >
+            {{ page }}
+          </button>
+        }
+
+        <button
+          type="button"
+          class="page-button"
+          [disabled]="currentPage() >= totalPages()"
+          (click)="nextPage()"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  }
 </div>
 
-@if (isLoading()) {
-  <app-idea-loader label="Loading users" />
-} @else {
-  <div class="panel">
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Phone</th>
-          <th>Role</th>
-          <th>Evaluator type</th>
-          <th>Organization</th>
-          <th>Status</th>
-          <th>Verified</th>
-          <th>Created</th>
-          <th>Last active</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (user of filteredUsers(); track user.id) {
-          <tr>
-            <td>{{ user.name }}</td>
-            <td>{{ user.email }}</td>
-            <td>{{ user.phone ?? '—' }}</td>
-            <td>
-              <label class="inline-role-picker">
-                <span class="sr-only">Change role for {{ user.name }}</span>
-                <select
-                  [value]="user.role"
-                  (change)="changeUserRole($event, user)"
-                  [attr.aria-label]="'Change role for ' + user.name"
-                >
-                  <option value="submitter">User</option>
-                  <option value="evaluator">Evaluator</option>
-                  <option value="adjudicator">Adjudicator</option>
-                  <option value="agent">Support Team</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </label>
-            </td>
-            <td>{{ user.evaluatorType ?? '—' }}</td>
-            <td>{{ user.organization ?? '—' }}</td>
-            <td>
-              <span class="status-pill" [class.disabled]="user.status === 'disabled'">{{
-                user.status
-              }}</span>
-            </td>
-            <td>{{ user.emailVerified ? 'Yes' : 'No' }}</td>
-            <td>{{ user.createdAt }}</td>
-            <td>{{ user.lastActive }}</td>
-            <td>
-              <div class="action-stack">
-                <button type="button" class="row-button" (click)="toggleStatus(user)">
-                  {{ user.status === 'active' ? 'Disable' : 'Enable' }}
-                </button>
-                <button type="button" class="row-button" (click)="resendInvite(user)">
-                  Resend invite
-                </button>
-                <button type="button" class="row-button danger" (click)="deleteUser(user)">
-                  Delete
-                </button>
+<!-- User Details & Edit Modal -->
+@if (selectedUser(); as user) {
+  <div class="modal-backdrop" (click)="closeUserModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">{{ user.name || 'User Details' }}</h2>
+          <p class="modal-subtitle">{{ user.email }}</p>
+        </div>
+
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeUserModal()"
+          aria-label="Close modal"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div class="modal-body">
+        @if (!isEditingUser()) {
+          <div class="details-grid">
+            <div class="detail-item">
+              <span class="detail-label">Name</span>
+              <span class="detail-value">{{ user.name || '—' }}</span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Email</span>
+              <span class="detail-value">{{ user.email }}</span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Phone</span>
+              <span class="detail-value">{{ user.phone || '—' }}</span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Role</span>
+              <span class="detail-value">{{ formatRole(user.role) }}</span>
+            </div>
+
+            @if (user.evaluatorType) {
+              <div class="detail-item">
+                <span class="detail-label">Evaluator type</span>
+                <span class="detail-value">{{ user.evaluatorType }}</span>
               </div>
-            </td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="11" class="empty-state">No users match the current filters.</td>
-          </tr>
+            }
+
+            @if (user.organization) {
+              <div class="detail-item">
+                <span class="detail-label">Organization</span>
+                <span class="detail-value">{{ user.organization }}</span>
+              </div>
+            }
+
+            <div class="detail-item">
+              <span class="detail-label">Status</span>
+              <span class="detail-value">
+                {{ user.status === 'active' ? 'Active' : 'Disabled' }}
+              </span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Ideas Shared</span>
+              <span class="detail-value">
+                @if (isLoadingIdeasCount() && selectedUserIdeasCount() === null) {
+                  Loading...
+                } @else {
+                  {{ selectedUserIdeasCount() ?? 0 }}
+                }
+              </span>
+            </div>
+          </div>
+
+          <h3 class="section-heading">Subscription</h3>
+          <div class="details-grid">
+            <div class="detail-item">
+              <span class="detail-label">Plan</span>
+              <span class="detail-value">{{ selectedUserSubscription().planName }}</span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Subscription Status</span>
+              <span class="detail-value">{{ selectedUserSubscription().status }}</span>
+            </div>
+
+            <div class="detail-item">
+              <span class="detail-label">Renewal Date</span>
+              <span class="detail-value">{{ selectedUserSubscription().renewalDate }}</span>
+            </div>
+          </div>
+        } @else {
+          <form [formGroup]="editUserForm" (ngSubmit)="saveUserInfo()" class="modal-form">
+            <div class="form-field">
+              <label for="edit-user-name">Full Name</label>
+              <input id="edit-user-name" type="text" formControlName="name" />
+              @if (editUserForm.controls.name.touched && editUserForm.controls.name.invalid) {
+                <span class="field-error">Name must be at least 2 characters.</span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="edit-user-phone">Phone</label>
+              <input id="edit-user-phone" type="text" formControlName="phone" />
+            </div>
+
+            <div class="form-field">
+              <label for="edit-user-role">Role</label>
+              <select id="edit-user-role" formControlName="role">
+                <option value="submitter">User</option>
+                <option value="agent">Support team</option>
+                <option value="evaluator">Evaluator</option>
+                <option value="adjudicator">Adjudicator</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <h3 class="section-heading">Subscription (Placeholder)</h3>
+
+            <div class="form-field">
+              <label for="edit-sub-plan">Plan</label>
+              <input id="edit-sub-plan" type="text" formControlName="subscriptionPlan" />
+            </div>
+
+            <div class="form-field">
+              <label for="edit-sub-status">Subscription Status</label>
+              <input id="edit-sub-status" type="text" formControlName="subscriptionStatus" />
+            </div>
+
+            <div class="form-field">
+              <label for="edit-sub-renewal">Renewal Date</label>
+              <input id="edit-sub-renewal" type="text" formControlName="subscriptionRenewal" />
+            </div>
+          </form>
         }
-      </tbody>
-    </table>
+      </div>
+
+      <div class="modal-footer">
+        @if (!isEditingUser()) {
+          <button
+            type="button"
+            class="row-button danger"
+            (click)="deleteUserFromModal(user)"
+          >
+            Delete user
+          </button>
+
+          <div class="modal-footer-right">
+            <button type="button" class="row-button" (click)="closeUserModal()">
+              Close
+            </button>
+            <button type="button" class="primary-button" (click)="startEditingUser()">
+              Update user info
+            </button>
+          </div>
+        } @else {
+          <div></div>
+          <div class="modal-footer-right">
+            <button
+              type="button"
+              class="row-button"
+              [disabled]="isSubmitting()"
+              (click)="cancelEditingUser()"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="primary-button"
+              [disabled]="isSubmitting() || editUserForm.invalid"
+              (click)="saveUserInfo()"
+            >
+              {{ isSubmitting() ? 'Saving...' : 'Save changes' }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
   </div>
 }
 
-<section class="panel create-panel" aria-labelledby="create-user-title">
-  <h3 id="create-user-title">Create user</h3>
+<!-- Create User Modal -->
+@if (isCreateModalOpen()) {
+  <div class="modal-backdrop" (click)="closeCreateModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">Add User</h2>
+          <p class="modal-subtitle">Create a new account and assign a role.</p>
+        </div>
 
-  <form [formGroup]="form" (ngSubmit)="createUser()" class="user-form">
-    <div class="field-row">
-      <label>
-        <span>Display name</span>
-        <input formControlName="name" type="text" placeholder="Jane Doe" />
-      </label>
-
-      <label>
-        <span>Email</span>
-        <input formControlName="email" type="email" placeholder="jane@example.org" />
-      </label>
-    </div>
-
-    <div class="field-row">
-      <label>
-        <span>Phone</span>
-        <input formControlName="phone" type="tel" placeholder="+26771234567" />
-      </label>
-
-      <label>
-        <span>Role</span>
-        <select formControlName="role" (change)="onCreateRoleChange($event)">
-          <option value="submitter">User</option>
-          <option value="evaluator">Evaluator</option>
-          <option value="adjudicator">Adjudicator</option>
-          <option value="agent">Support Team</option>
-          <option value="admin">Admin</option>
-        </select>
-      </label>
-    </div>
-
-    @if (createEvaluatorFieldsVisible()) {
-      <div class="field-row">
-        <label>
-          <span>Evaluator type</span>
-          <select formControlName="evaluatorType">
-            <option value="internal">Internal</option>
-            <option value="external">External</option>
-          </select>
-        </label>
-
-        <label>
-          <span>Organization</span>
-          <input
-            formControlName="organization"
-            type="text"
-            maxlength="160"
-            placeholder="Required for external evaluators"
-          />
-        </label>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeCreateModal()"
+          aria-label="Close create modal"
+        >
+          ✕
+        </button>
       </div>
-    }
 
-    <div class="form-actions">
-      <button type="submit" class="primary-button">Create</button>
+      <form [formGroup]="form" (ngSubmit)="createUser()" class="modal-body modal-form">
+        <div class="form-field">
+          <label for="create-user-name">Full Name</label>
+          <input id="create-user-name" type="text" formControlName="name" />
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <span class="field-error">Please enter a name (at least 2 characters).</span>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="create-user-email">Email</label>
+          <input id="create-user-email" type="email" formControlName="email" />
+          @if (form.controls.email.touched && form.controls.email.invalid) {
+            <span class="field-error">Please enter a valid email address.</span>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="create-user-phone">Phone (optional)</label>
+          <input id="create-user-phone" type="text" formControlName="phone" />
+        </div>
+
+        <div class="form-field">
+          <label for="create-user-role">Role</label>
+          <select
+            id="create-user-role"
+            formControlName="role"
+            (change)="onCreateRoleChange($event)"
+          >
+            <option value="submitter">User</option>
+            <option value="agent">Support team</option>
+            <option value="evaluator">Evaluator</option>
+            <option value="adjudicator">Adjudicator</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+
+        @if (createEvaluatorFieldsVisible()) {
+          <div class="form-field">
+            <label for="create-user-evaluator-type">Evaluator type</label>
+            <select id="create-user-evaluator-type" formControlName="evaluatorType">
+              <option value="internal">Internal</option>
+              <option value="external">External</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="create-user-organization">Organization</label>
+            <input
+              id="create-user-organization"
+              type="text"
+              maxlength="160"
+              formControlName="organization"
+              placeholder="Required for external evaluators"
+            />
+          </div>
+        }
+
+        @if (requiresDefaultPassword()) {
+          <div class="form-field">
+            <div class="field-label-row">
+              <label for="create-user-password">Default Staff Password</label>
+              <button
+                type="button"
+                class="link-button"
+                (click)="applyDefaultPassword()"
+              >
+                Use default
+              </button>
+            </div>
+            <input
+              id="create-user-password"
+              type="text"
+              formControlName="defaultPassword"
+            />
+          </div>
+        }
+
+        <div class="modal-footer">
+          <div></div>
+          <div class="modal-footer-right">
+            <button
+              type="button"
+              class="row-button"
+              [disabled]="creatingUser()"
+              (click)="closeCreateModal()"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="primary-button"
+              [disabled]="creatingUser() || form.invalid"
+            >
+              {{ creatingUser() ? 'Creating...' : 'Create User' }}
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
-  </form>
-</section>
+  </div>
+}

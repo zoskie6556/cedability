@@ -15,7 +15,7 @@ import {
 
 @Component({
   selector: 'app-admin-overview',
-  imports: [RouterLink],
+  imports: [RouterLink ],
   templateUrl: './overview.component.html',
   styleUrl: './overview.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

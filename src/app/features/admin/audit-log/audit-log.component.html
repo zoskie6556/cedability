@@ -1,10 +1,18 @@
 <section class="page-shell">
   <p class="eyebrow">Compliance</p>
   <h2>Audit log</h2>
-  <p>Inspect who changed what, when, and why across the admin workspace.</p>
+  <p class="subtitle">Inspect who changed what, when, and why across the admin workspace.</p>
+
+  <div class="desktop-notice" role="note">
+    <span class="notice-badge">Desktop recommended</span>
+    <span>
+      Audit logs contain multi-column records and detailed metadata that are best viewed on a desktop screen.
+      Scroll horizontally below if you are on a smaller viewport.
+    </span>
+  </div>
 
   @if (error()) {
-    <p class="empty-state" role="alert">{{ error() }}</p>
+    <p class="empty-state error-banner" role="alert">{{ error() }}</p>
   }
 
   <div class="toolbar">
@@ -71,7 +79,7 @@
         <tbody>
           @for (entry of pageRows(); track entry.id) {
             <tr>
-              <td>{{ formatDate(entry.at) }}</td>
+              <td class="when-cell">{{ formatDate(entry.at) }}</td>
               <td>
                 <strong>{{ entry.actorName }}</strong>
                 @if (entry.actorRole) {
@@ -105,7 +113,7 @@
 
     <div class="pager">
       <button type="button" class="secondary-button" [disabled]="page() === 0" (click)="previousPage()">Previous</button>
-      <span>Page {{ page() + 1 }} of {{ pageCount() }}</span>
+      <span class="page-indicator">Page {{ page() + 1 }} of {{ pageCount() }}</span>
       <button type="button" class="secondary-button" [disabled]="page() >= pageCount() - 1" (click)="nextPage()">Next</button>
 
       @if (canLoadMore()) {

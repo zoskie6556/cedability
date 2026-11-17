@@ -16,17 +16,26 @@ export class GeminiLiveService implements OnDestroy {
   private processorNode: ScriptProcessorNode | null = null;
   private playbackCtx: AudioContext | null = null;
   private nextPlaybackTime = 0;
+  private audioChunkCount = 0;
 
   private readonly model = 'gemini-2.5-flash';
   private readonly systemInstruction =
     'You are a hands-free voice accessibility assistant helping users who cannot see or type draft, structure, and refine their ideas clearly and concisely.';
 
   async startSession(apiKey: string): Promise<void> {
+    console.log('[GeminiLive] startSession called', {
+      hasExistingSession: Boolean(this.session),
+      hasApiKey: Boolean(apiKey?.trim()),
+      model: this.model,
+    });
+
     if (this.session) {
+      console.warn('[GeminiLive] Session already active; ignoring duplicate startSession call');
       return;
     }
 
     if (!apiKey?.trim()) {
+      console.error('[GeminiLive] Missing Gemini API key or ephemeral token');
       this.sessionState.set('error');
       this.statusMessage.set('Missing Gemini API key or ephemeral token.');
       return;
@@ -36,9 +45,11 @@ export class GeminiLiveService implements OnDestroy {
     this.statusMessage.set('Connecting to Gemini Live...');
     this.draftedIdea.set('');
     this.assistantReply.set('');
+    this.audioChunkCount = 0;
 
     try {
       const ai = new GoogleGenAI({ apiKey });
+      console.log('[GeminiLive] Connecting via ai.live.connect...');
 
       this.session = await ai.live.connect({
         model: this.model,
@@ -52,17 +63,20 @@ export class GeminiLiveService implements OnDestroy {
         },
         callbacks: {
           onopen: () => {
+            console.log('[GeminiLive] WebSocket / Live session opened');
             this.sessionState.set('listening');
             this.statusMessage.set('Listening — speak to draft your idea...');
           },
           onmessage: (msg) => {
             this.handleServerMessage(msg);
           },
-          onerror: () => {
+          onerror: (err) => {
+            console.error('[GeminiLive] Live session error callback:', err);
             this.sessionState.set('error');
             this.statusMessage.set('Voice connection error. Try again.');
           },
-          onclose: () => {
+          onclose: (event) => {
+            console.log('[GeminiLive] Live session closed', event);
             if (this.sessionState() !== 'error') {
               this.sessionState.set('idle');
               this.statusMessage.set('Voice session closed.');
@@ -71,8 +85,11 @@ export class GeminiLiveService implements OnDestroy {
         },
       });
 
+      console.log('[GeminiLive] Live session connected; starting microphone capture');
       await this.startMicrophoneCapture();
-    } catch {
+      console.log('[GeminiLive] Microphone capture started successfully');
+    } catch (err) {
+      console.error('[GeminiLive] Failed to start session or microphone capture:', err);
       this.cleanupMedia();
       this.session = null;
       this.sessionState.set('error');
@@ -81,13 +98,20 @@ export class GeminiLiveService implements OnDestroy {
   }
 
   async stopSession(): Promise<void> {
+    console.log('[GeminiLive] stopSession called', {
+      currentState: this.sessionState(),
+      hasSession: Boolean(this.session),
+      totalAudioChunksPlayed: this.audioChunkCount,
+    });
+
     this.cleanupMedia();
 
     if (this.session) {
       try {
         this.session.close();
-      } catch {
-        // Ignore close errors during teardown
+        console.log('[GeminiLive] Active session closed');
+      } catch (err) {
+        console.warn('[GeminiLive] Error while closing session:', err);
       }
       this.session = null;
     }
@@ -98,7 +122,11 @@ export class GeminiLiveService implements OnDestroy {
 
   appendIdeaNote(text: string): void {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      console.warn('[GeminiLive] appendIdeaNote called with empty text');
+      return;
+    }
+    console.log('[GeminiLive] Appending manual idea note:', trimmed);
     this.entries.update((list) => [
       ...list,
       {
@@ -111,19 +139,26 @@ export class GeminiLiveService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    console.log('[GeminiLive] ngOnDestroy triggered');
     void this.stopSession();
   }
 
   private handleServerMessage(msg: any): void {
     const serverContent = msg?.serverContent;
+    if (!serverContent) {
+      console.log('[GeminiLive] Non-serverContent message received:', msg);
+      return;
+    }
 
     const inputTranscript = serverContent?.inputTranscription?.text;
     if (inputTranscript) {
+      console.log('[GeminiLive] Input transcript chunk:', inputTranscript);
       this.draftedIdea.update((curr) => `${curr}${inputTranscript}`);
     }
 
     const outputTranscript = serverContent?.outputTranscription?.text;
     if (outputTranscript) {
+      console.log('[GeminiLive] Output transcript chunk:', outputTranscript);
       this.assistantReply.update((curr) => `${curr}${outputTranscript}`);
     }
 
@@ -131,6 +166,12 @@ export class GeminiLiveService implements OnDestroy {
     if (Array.isArray(parts)) {
       for (const part of parts) {
         if (part?.inlineData?.data && String(part.inlineData.mimeType || '').startsWith('audio/pcm')) {
+          this.audioChunkCount += 1;
+          if (this.audioChunkCount === 1 || this.audioChunkCount % 25 === 0) {
+            console.log(
+              `[GeminiLive] Receiving PCM audio chunk #${this.audioChunkCount} (${part.inlineData.mimeType}, base64Len=${part.inlineData.data.length})`
+            );
+          }
           this.sessionState.set('speaking');
           this.statusMessage.set('Speaking response...');
           this.playPcm16Chunk(part.inlineData.data, 24000);
@@ -141,6 +182,11 @@ export class GeminiLiveService implements OnDestroy {
     if (serverContent?.turnComplete) {
       const currentDraft = this.draftedIdea().trim();
       const currentReply = this.assistantReply().trim();
+      console.log('[GeminiLive] Turn complete', {
+        currentDraft,
+        currentReply,
+        audioChunkCount: this.audioChunkCount,
+      });
 
       if (currentDraft || currentReply) {
         this.entries.update((list) => [
@@ -165,9 +211,11 @@ export class GeminiLiveService implements OnDestroy {
 
   private async startMicrophoneCapture(): Promise<void> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      console.error('[GeminiLive] navigator.mediaDevices.getUserMedia unavailable');
       throw new Error('Microphone access is unsupported in this browser.');
     }
 
+    console.log('[GeminiLive] Requesting microphone access (16kHz mono)...');
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -176,12 +224,21 @@ export class GeminiLiveService implements OnDestroy {
         noiseSuppression: true,
       },
     });
+    console.log('[GeminiLive] Microphone stream tracks:', this.micStream.getAudioTracks().map((t) => ({
+      label: t.label,
+      enabled: t.enabled,
+      readyState: t.readyState,
+      settings: t.getSettings(),
+    })));
 
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     this.captureCtx = new AudioCtx({ sampleRate: 16000 });
+    console.log('[GeminiLive] Capture AudioContext state:', this.captureCtx.state, 'sampleRate:', this.captureCtx.sampleRate);
+
     const source = this.captureCtx.createMediaStreamSource(this.micStream);
     this.processorNode = this.captureCtx.createScriptProcessor(4096, 1, 1);
 
+    let sentFrameCount = 0;
     this.processorNode.onaudioprocess = (event) => {
       if (!this.session || this.sessionState() === 'error') return;
       const float32 = event.inputBuffer.getChannelData(0);
@@ -192,6 +249,10 @@ export class GeminiLiveService implements OnDestroy {
           mimeType: 'audio/pcm;rate=16000',
         },
       });
+      sentFrameCount += 1;
+      if (sentFrameCount === 1 || sentFrameCount % 50 === 0) {
+        console.log(`[GeminiLive] Sent mic audio frame #${sentFrameCount}`);
+      }
     };
 
     source.connect(this.processorNode);
@@ -203,6 +264,15 @@ export class GeminiLiveService implements OnDestroy {
     if (!this.playbackCtx) {
       this.playbackCtx = new AudioCtx({ sampleRate });
       this.nextPlaybackTime = this.playbackCtx.currentTime;
+      console.log('[GeminiLive] Created playback AudioContext:', {
+        state: this.playbackCtx.state,
+        sampleRate: this.playbackCtx.sampleRate,
+      });
+    }
+
+    if (this.playbackCtx.state === 'suspended') {
+      console.warn('[GeminiLive] Playback AudioContext is suspended; attempting resume()');
+      void this.playbackCtx.resume();
     }
 
     const binary = atob(base64Data);
@@ -243,6 +313,7 @@ export class GeminiLiveService implements OnDestroy {
   }
 
   private cleanupMedia(): void {
+    console.log('[GeminiLive] Cleaning up media nodes and streams...');
     if (this.processorNode) {
       this.processorNode.disconnect();
       this.processorNode.onaudioprocess = null;
