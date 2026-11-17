@@ -193,6 +193,99 @@ progress::-moz-progress-bar {
   font-weight: 700;
 }
 
+.feedback-section {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line, #eadfd8);
+}
+
+.feedback-section h3,
+.submitter-reply h4 {
+  margin: 0;
+  color: var(--ceda-deep, #4d211b);
+}
+
+.feedback-section > p,
+.feedback-item p,
+.submitter-reply time {
+  margin: 0;
+  color: var(--muted, #6d625d);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.email-notice,
+.feedback-error {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: #fff4d5;
+  color: #604400 !important;
+}
+
+.feedback-error {
+  background: #fbe9e7;
+  color: #7a201a !important;
+  font-weight: 700;
+}
+
+.feedback-list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.feedback-item {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  border: 1px solid var(--line, #eadfd8);
+  border-radius: 0.7rem;
+  background: #fffdfb;
+}
+
+.feedback-item .feedback-byline {
+  color: var(--ceda-deep, #4d211b);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.submitter-reply {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  border-left: 3px solid #267343;
+  background: #e8f4eb;
+}
+
+.reply-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.reply-form label {
+  color: #352620;
+  font-weight: 700;
+}
+
+.reply-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #66554d;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #221915;
+  font: inherit;
+}
+
+.reply-form textarea:focus-visible {
+  outline: 3px solid #174a70;
+  outline-offset: 3px;
+}
+
 .results-count {
   margin: 0 0 0.85rem;
   color: var(--muted, #6d625d);

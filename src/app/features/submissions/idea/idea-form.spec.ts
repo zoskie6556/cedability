@@ -6,8 +6,10 @@ import {
   newCostGroup,
   newMilestoneGroup,
   sumCosts,
+  toIdeaFormValue,
   toNewIdea,
 } from './idea-form';
+import type { Idea } from '../../../shared/models/idea.model';
 
 function makeForm() {
   const fb = new FormBuilder().nonNullable;
@@ -87,6 +89,49 @@ describe('idea form', () => {
       ['aiAnalysisConsent', 'feasibilityPlan', 'financingPlan', 'intendedBeneficiaries', 'marketPlan',
        'milestones', 'ownerId', 'ownerName', 'plannedLocation', 'problem', 'proposedSolution', 'title'].sort(),
     );
+  });
+
+  it('prefills all plan sections and repeated rows from an existing idea', () => {
+    const { fb, form } = makeForm();
+    fillEverything(form);
+    form.controls.financing.controls.costs.push(newCostGroup(fb));
+    form.controls.financing.controls.costs.at(1).patchValue({
+      item: 'Fans',
+      amount: 99.5,
+      description: 'Ventilation',
+    });
+    form.controls.milestones.push(newMilestoneGroup(fb));
+    form.controls.milestones.at(1).patchValue({
+      title: 'Plant first crop',
+      targetDate: '2027-07-01',
+      successMeasure: 'First harvest ready',
+      estimatedCost: 250,
+    });
+
+    const newIdea = toNewIdea(form, 'uid-1', 'Thato');
+    const idea: Idea = {
+      ...newIdea,
+      id: 'idea-1',
+      category: null,
+      similarityCheck: null,
+      automatedReview: null,
+      status: 'needs_amendment',
+      version: 2,
+      createdAt: null,
+      submittedAt: null,
+      updatedAt: null,
+    };
+    const { fb: targetFb, form: targetForm } = makeForm();
+    targetForm.controls.financing.controls.costs.push(newCostGroup(targetFb));
+    targetForm.controls.milestones.push(newMilestoneGroup(targetFb));
+    targetForm.patchValue(toIdeaFormValue(idea));
+
+    expect(targetForm.controls.basics.controls.title.value).toBe('Solar cold rooms');
+    expect(targetForm.controls.financing.controls.costs.length).toBe(2);
+    expect(targetForm.controls.financing.controls.costs.at(1).controls.item.value).toBe('Fans');
+    expect(targetForm.controls.milestones.length).toBe(2);
+    expect(targetForm.controls.milestones.at(1).controls.title.value).toBe('Plant first crop');
+    expect(targetForm.controls.consent.controls.aiAnalysis.value).toBe(true);
   });
 
   it('sums money without floating point noise', () => {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
-import type { Idea } from '../../../shared/models/idea.model';
+import type { Idea, IdeaFeedback } from '../../../shared/models/idea.model';
 import { StatusComponent } from './status.component';
 
 describe('StatusComponent', () => {
@@ -22,6 +22,8 @@ describe('StatusComponent', () => {
           onError: (error: unknown) => void,
         ) => () => void
       >(),
+    getFeedbackForIdea: vi.fn<() => Promise<IdeaFeedback[]>>().mockResolvedValue([]),
+    replyToFeedback: vi.fn<() => Promise<void>>().mockResolvedValue(),
   };
   const toastService = { error: vi.fn() };
   let fixture: ComponentFixture<StatusComponent>;
@@ -34,6 +36,8 @@ describe('StatusComponent', () => {
       emitIdeas = onIdeas;
       return vi.fn();
     });
+    userDataService.getFeedbackForIdea.mockReset().mockResolvedValue([]);
+    userDataService.replyToFeedback.mockReset().mockResolvedValue();
     toastService.error.mockReset();
 
     TestBed.configureTestingModule({
@@ -80,6 +84,37 @@ describe('StatusComponent', () => {
     });
     expect(userDataService.watchIdeasForUser).not.toHaveBeenCalled();
   });
+
+  it('shows evaluator feedback, a reply box, and the resubmission route', async () => {
+    userDataService.getFeedbackForIdea.mockResolvedValue([
+      {
+        id: 'feedback-1',
+        ideaId: 'idea-1',
+        stageId: 'human_review',
+        evaluatorUid: 'evaluator-1',
+        evaluatorName: 'Evaluator',
+        message: 'Please explain the delivery timeline.',
+        requiresResubmission: true,
+        reply: null,
+        createdAt: null,
+      },
+    ]);
+
+    fixture.detectChanges();
+    await vi.waitFor(() => expect(emitIdeas).not.toBeNull());
+    emitIdeas?.([{ ...makeIdea(), status: 'needs_amendment' }]);
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('Please explain the delivery timeline.');
+    });
+
+    expect(fixture.nativeElement.querySelector('.reply-form textarea')).not.toBeNull();
+    const updateLink = fixture.nativeElement.querySelector(
+      'a[href="/submissions/idea/idea-1/update"]',
+    ) as HTMLAnchorElement | null;
+    expect(updateLink?.textContent).toContain('Update and resubmit');
+  });
 });
 
 function makeIdea(): Idea {
@@ -117,7 +152,9 @@ function makeIdea(): Idea {
     similarityCheck: null,
     automatedReview: null,
     status: 'ai_screening',
+    version: 1,
     createdAt: null,
+    submittedAt: null,
     updatedAt: null,
   };
 }

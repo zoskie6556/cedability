@@ -61,12 +61,31 @@ export interface IdeaDocument {
   similarityCheck: SimilarityCheckResult | null;
   automatedReview: AutomatedReviewReport | null;
   status: IdeaStatus;
+  version: number;
   createdAt: Timestamp | null;
+  submittedAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
 export interface Idea extends IdeaDocument {
   id: string;
+}
+
+export interface IdeaFeedbackReply {
+  message: string;
+  at: Timestamp | null;
+}
+
+export interface IdeaFeedback {
+  id: string;
+  ideaId: string;
+  stageId: string;
+  evaluatorUid: string;
+  evaluatorName: string;
+  message: string;
+  requiresResubmission: boolean;
+  reply: IdeaFeedbackReply | null;
+  createdAt: Timestamp | null;
 }
 
 export type NewIdea = Pick<

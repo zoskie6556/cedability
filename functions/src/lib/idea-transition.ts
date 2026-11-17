@@ -2,7 +2,9 @@ import {
   FieldValue,
   getFirestore,
   type DocumentData,
+  type DocumentSnapshot,
   type DocumentReference,
+  type Transaction,
 } from 'firebase-admin/firestore';
 import {
   canTransition,
@@ -10,6 +12,7 @@ import {
   NOTE_REQUIRED,
   STAGES,
   type IdeaStatus,
+  type WorkflowActor,
 } from '../shared/idea-workflow';
 import type {
   AutomatedReviewReport,
@@ -17,11 +20,22 @@ import type {
   SimilarityCheckResult,
 } from '../shared/automated-review.model';
 import { createAuditLogRecord } from './audit';
+import { HttpsError } from 'firebase-functions/v2/https';
 
 export interface IdeaTransitionUpdates {
-  category?: IdeaCategory;
-  similarityCheck?: SimilarityCheckResult;
-  automatedReview?: AutomatedReviewReport;
+  category?: IdeaCategory | null;
+  similarityCheck?: SimilarityCheckResult | null;
+  automatedReview?: AutomatedReviewReport | null;
+}
+
+export interface IdeaTransitionOptions {
+  actor?: { uid: string; role: WorkflowActor };
+  stageId?: string;
+  ideaFields?: DocumentData;
+  auditAction?: string;
+  auditSummary?: string;
+  validate?: (transaction: Transaction, current: DocumentSnapshot) => Promise<void>;
+  write?: (transaction: Transaction, current: DocumentSnapshot) => void;
 }
 
 export async function transitionIdea(
@@ -29,13 +43,15 @@ export async function transitionIdea(
   to: IdeaStatus,
   note: string | null = null,
   updates: IdeaTransitionUpdates = {},
+  options: IdeaTransitionOptions = {},
 ): Promise<boolean> {
   const cleanNote = note?.trim() || null;
+  const actor = options.actor ?? { uid: 'system', role: 'system' };
   if (cleanNote && cleanNote.length > 500) {
-    throw new Error('The idea status note is too long.');
+    throw new HttpsError('invalid-argument', 'The idea status note is too long.');
   }
   if (NOTE_REQUIRED.includes(to) && !cleanNote) {
-    throw new Error(`The ${to} transition requires a note.`);
+    throw new HttpsError('invalid-argument', `The ${to} transition requires a note.`);
   }
 
   const db = getFirestore();
@@ -50,18 +66,27 @@ export async function transitionIdea(
 
     const from = current.get('status');
     if (!isIdeaStatus(from)) {
-      throw new Error('The idea has an invalid workflow status.');
+      throw new HttpsError('failed-precondition', 'The idea has an invalid workflow status.');
     }
     if (from === to) {
       return false;
     }
-    if (!canTransition(from, to, 'system')) {
-      throw new Error(`The system cannot move an idea from ${from} to ${to}.`);
+    if (!canTransition(from, to, actor.role)) {
+      throw new HttpsError(
+        'failed-precondition',
+        `A ${actor.role} actor cannot move an idea from ${from} to ${to}.`,
+      );
+    }
+    if (actor.role !== 'system' && actor.uid.trim().length === 0) {
+      throw new HttpsError('invalid-argument', 'A workflow actor must have a valid UID.');
     }
 
     const ownerId = current.get('ownerId');
     if (typeof ownerId !== 'string' || ownerId.trim().length === 0) {
-      throw new Error('The idea has no valid owner for its status notification.');
+      throw new HttpsError(
+        'failed-precondition',
+        'The idea has no valid owner for its status notification.',
+      );
     }
 
     const notificationRef = db
@@ -69,7 +94,9 @@ export async function transitionIdea(
       .doc(ownerId)
       .collection('notifications')
       .doc();
+    await options.validate?.(transaction, current);
     const update: DocumentData = {
+      ...options.ideaFields,
       status: to,
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -85,11 +112,13 @@ export async function transitionIdea(
     transaction.create(historyRef, {
       from,
       to,
-      byUid: 'system',
-      byRole: 'system',
+      ...(options.stageId === undefined ? {} : { stageId: options.stageId }),
+      byUid: actor.uid,
+      byRole: actor.role,
       note: cleanNote,
       at: FieldValue.serverTimestamp(),
     });
+    options.write?.(transaction, current);
     transaction.create(notificationRef, {
       type: 'idea_status_changed',
       title: `Idea update: ${STAGES[to].label}`,
@@ -101,12 +130,12 @@ export async function transitionIdea(
     transaction.create(
       auditRef,
       createAuditLogRecord({
-        actorUid: 'system',
-        actorRole: 'system',
-        action: 'idea.status_changed',
+        actorUid: actor.uid,
+        actorRole: actor.role,
+        action: options.auditAction ?? 'idea.status_changed',
         entityType: 'idea',
         entityId: ideaRef.id,
-        summary: `Idea status moved from ${from} to ${to}.`,
+        summary: options.auditSummary ?? `Idea status moved from ${from} to ${to}.`,
       }),
     );
 

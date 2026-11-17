@@ -5,8 +5,12 @@
 // read user records for the admin user-management workflow.
 // ideas/{ideaId}: one submitted idea with ownerId, plans, timestamps and
 // server-managed category, similarityCheck and automatedReview results.
-// Clients can only create the fixed queued review envelope and cannot update
-// or delete ideas.
+// Submitters create version 1 and cannot update or delete ideas directly.
+// Evaluator request-changes and owner resubmission writes are performed by
+// authenticated Cloud Functions; versions are immutable to clients.
+// ideas/{ideaId}/feedback/{feedbackId}: server-written evaluator note and
+// one owner-authored reply. Only the owner may read or reply.
+// ideas/{ideaId}/versions/{versionId}: immutable snapshots readable by owner.
 // ideas/{ideaId}/evaluatorViews/{assignmentId}: sanitized idea fields, scoring
 // criteria and stage data for one external evaluator assignment.
 // ideas/{ideaId}/evaluations/{stageId_evaluatorUid}: validated scores and
@@ -409,7 +413,10 @@ service cloud.firestore {
         && request.resource.data.plannedLocation.size() <= 200
         && request.resource.data.aiAnalysisConsent is bool
         && request.resource.data.status == 'submitted'
+        && request.resource.data.version is int
+        && request.resource.data.version == 1
         && request.resource.data.createdAt == request.time
+        && request.resource.data.submittedAt == request.time
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -460,6 +467,36 @@ service cloud.firestore {
         && request.resource.data.response.size() > 0
         && request.resource.data.respondedBy == request.auth.uid
         && request.resource.data.respondedAt == request.time;
+    }
+
+    function isValidFeedbackReply() {
+      let reply = request.resource.data.get('reply', null);
+      return resource.data.get('reply', null) == null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reply'])
+        && request.resource.data.keys().hasAll([
+          'stageId', 'evaluatorUid', 'evaluatorName', 'message',
+          'requiresResubmission', 'reply', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'stageId', 'evaluatorUid', 'evaluatorName', 'message',
+          'requiresResubmission', 'reply', 'createdAt'
+        ])
+        && isBoundedString(request.resource.data.stageId, 80)
+        && request.resource.data.stageId.size() > 0
+        && isBoundedString(request.resource.data.evaluatorUid, 128)
+        && request.resource.data.evaluatorUid.size() > 0
+        && isBoundedString(request.resource.data.evaluatorName, 120)
+        && request.resource.data.evaluatorName.size() > 0
+        && isBoundedString(request.resource.data.message, 500)
+        && request.resource.data.message.size() > 0
+        && request.resource.data.requiresResubmission == true
+        && reply is map
+        && reply.keys().hasAll(['message', 'at'])
+        && reply.keys().hasOnly(['message', 'at'])
+        && isBoundedString(reply.message, 2000)
+        && reply.message.size() > 0
+        && reply.at == request.time
+        && request.resource.data.createdAt is timestamp;
     }
 
     function isValidProfile(profile) {
@@ -873,6 +910,14 @@ service cloud.firestore {
     }
 
     match /ideas/{ideaId} {
+      function parentIdeaExists() {
+        return exists(/databases/$(database)/documents/ideas/$(ideaId));
+      }
+
+      function parentIdeaOwnerId() {
+        return get(/databases/$(database)/documents/ideas/$(ideaId)).data.ownerId;
+      }
+
       allow create: if isUser()
         && isValidIdea()
         && request.resource.data.keys().hasAll([
@@ -891,7 +936,9 @@ service cloud.firestore {
           'aiAnalysisConsentAt',
           'automatedReview',
           'status',
+          'version',
           'createdAt',
+          'submittedAt',
           'updatedAt'
         ])
         && request.resource.data.keys().hasOnly([
@@ -910,7 +957,9 @@ service cloud.firestore {
           'aiAnalysisConsentAt',
           'automatedReview',
           'status',
+          'version',
           'createdAt',
+          'submittedAt',
           'updatedAt'
         ])
         && request.resource.data.aiAnalysisConsent == true
@@ -1013,9 +1062,29 @@ service cloud.firestore {
         && request.resource.data.automatedReview.limitations == []
         && request.resource.data.automatedReview.startedAt == null
         && request.resource.data.automatedReview.completedAt == null
-        && request.resource.data.automatedReview.failureMessage == null;
+        && request.resource.data.automatedReview.failureMessage == null
+        && request.resource.data.version == 1
+        && request.resource.data.submittedAt == request.time;
       allow get, list: if canReadIdea(resource.data.ownerId);
       allow update, delete: if false;
+
+      match /versions/{versionId} {
+        allow get, list: if parentIdeaExists()
+          && isUser()
+          && signedInAs(parentIdeaOwnerId());
+        allow create, update, delete: if false;
+      }
+
+      match /feedback/{feedbackId} {
+        allow get, list: if parentIdeaExists()
+          && isUser()
+          && signedInAs(parentIdeaOwnerId());
+        allow create, delete: if false;
+        allow update: if parentIdeaExists()
+          && isUser()
+          && signedInAs(parentIdeaOwnerId())
+          && isValidFeedbackReply();
+      }
 
       match /evaluatorViews/{assignmentId} {
         allow get: if isAdmin()
@@ -1054,14 +1123,6 @@ service cloud.firestore {
       }
 
       match /questions/{questionId} {
-        function parentIdeaExists() {
-          return exists(/databases/$(database)/documents/ideas/$(ideaId));
-        }
-
-        function parentIdeaOwnerId() {
-          return get(/databases/$(database)/documents/ideas/$(ideaId)).data.ownerId;
-        }
-
         allow get: if signedInAs(parentIdeaOwnerId())
           || isInternalEvaluator()
           || (isExternalEvaluator()

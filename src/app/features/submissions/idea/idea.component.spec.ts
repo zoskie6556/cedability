@@ -3,7 +3,8 @@ import { Auth, user } from '@angular/fire/auth';
 import type { User as FirebaseUser } from '@angular/fire/auth';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../../core/services/auth.service';
@@ -13,6 +14,7 @@ import { SpeechService } from '../../../core/services/speech.service';
 import { IdeaComponent } from './idea.component';
 import { IdeaDraftService } from './idea-draft.service';
 import { buildIdeaForm, toNewIdea } from './idea-form';
+import type { Idea } from '../../../shared/models/idea.model';
 
 vi.mock('@angular/fire/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@angular/fire/auth')>();
@@ -70,6 +72,8 @@ const answers = {
 };
 
 describe('IdeaComponent', () => {
+  let routeIdeaId: string | null;
+  const routeParams = new BehaviorSubject({ get: (_name: string) => routeIdeaId });
   const toastService = {
     success: vi.fn(),
     error: vi.fn(),
@@ -78,6 +82,8 @@ describe('IdeaComponent', () => {
   const userDataService = {
     getOrCreateUser: vi.fn(),
     createIdea: vi.fn(),
+    getIdeaById: vi.fn(),
+    resubmitIdea: vi.fn(),
   };
   const draftService = {
     load: vi.fn(),
@@ -85,6 +91,8 @@ describe('IdeaComponent', () => {
     clear: vi.fn(),
   };
   const speechService = {
+    supported: vi.fn().mockReturnValue(false),
+    canSpeak: vi.fn().mockReturnValue(false),
     listening: signal(false),
     owner: signal<unknown>(null),
     transcript: signal(''),
@@ -98,9 +106,13 @@ describe('IdeaComponent', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    routeIdeaId = null;
+    routeParams.next({ get: (_name: string) => routeIdeaId });
     vi.mocked(user).mockReturnValue(of(authenticatedUser));
     userDataService.getOrCreateUser.mockResolvedValue({ fullName: 'Casey Example' });
     userDataService.createIdea.mockResolvedValue('idea-123');
+    userDataService.getIdeaById.mockResolvedValue(null);
+    userDataService.resubmitIdea.mockResolvedValue({ ideaId: 'idea-123', version: 5 });
     draftService.load.mockReturnValue(null);
     router.navigate.mockResolvedValue(true);
 
@@ -113,6 +125,13 @@ describe('IdeaComponent', () => {
         { provide: IdeaDraftService, useValue: draftService },
         { provide: SpeechService, useValue: speechService },
         { provide: Router, useValue: router },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { paramMap: { get: () => routeIdeaId } },
+            paramMap: routeParams.asObservable(),
+          },
+        },
       ],
     }).compileComponents();
   });
@@ -139,61 +158,36 @@ describe('IdeaComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const setInput = (id: string, value: string): void => {
-      const input = fixture.nativeElement.querySelector(`#${id}`) as
-        | HTMLInputElement
-        | HTMLTextAreaElement;
-      expect(input, id).not.toBeNull();
-      input.value = value;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      fixture.detectChanges();
-    };
+    const formModel = Reflect.get(fixture.componentInstance, 'form') as ReturnType<
+      typeof buildIdeaForm
+    >;
+    formModel.patchValue(answers);
+    fixture.detectChanges();
 
+    let expectedStep = 1;
     const continueStep = async (): Promise<void> => {
       const next = fixture.nativeElement.querySelector('.actions .primary') as HTMLButtonElement;
       next.click();
       await fixture.whenStable();
       fixture.detectChanges();
+      expectedStep += 1;
+      expect(fixture.nativeElement.querySelector('h2')?.textContent).toContain(
+        `Step ${expectedStep} of 6`,
+      );
     };
 
-    setInput('title', answers.basics.title);
-    setInput('problem', answers.basics.problem);
-    setInput('solution', answers.basics.proposedSolution);
-    setInput('beneficiaries', answers.basics.intendedBeneficiaries);
-    setInput('location', answers.basics.plannedLocation);
-    await continueStep();
-
-    setInput('target-market', answers.market.targetMarket);
-    setInput('alternatives', answers.market.alternatives);
-    setInput('differentiation', answers.market.differentiation);
-    setInput('validation', answers.market.marketValidation);
-    await continueStep();
-
-    setInput('technical', answers.feasibility.technicalApproach);
-    setInput('operations', answers.feasibility.operationalPlan);
-    setInput('evidence', answers.feasibility.validationEvidence);
-    setInput('assumptions', answers.feasibility.assumptions);
-    setInput('risks', answers.feasibility.risks);
-    await continueStep();
-
-    setInput('cost-0-item', answers.financing.costs[0].item);
-    setInput('cost-0-amount', String(answers.financing.costs[0].amount));
-    setInput('cost-0-desc', answers.financing.costs[0].description);
-    setInput('funding-sources', answers.financing.fundingSources);
-    await continueStep();
-
-    setInput('ms-0-title', answers.milestones[0].title);
-    setInput('ms-0-date', answers.milestones[0].targetDate);
-    setInput('ms-0-measure', answers.milestones[0].successMeasure);
-    setInput('ms-0-cost', String(answers.milestones[0].estimatedCost));
-    await continueStep();
+    for (let index = 0; index < 5; index += 1) {
+      await continueStep();
+    }
 
     const consent = fixture.nativeElement.querySelector('#ai-consent') as HTMLInputElement;
     consent.checked = true;
     consent.dispatchEvent(new Event('change', { bubbles: true }));
     fixture.detectChanges();
     const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const EventConstructor = form.ownerDocument.defaultView?.Event;
+    if (!EventConstructor) throw new Error('Could not access the form event constructor.');
+    form.dispatchEvent(new EventConstructor('submit', { bubbles: true, cancelable: true }));
     await fixture.whenStable();
 
     const expectedForm = buildIdeaForm(new FormBuilder().nonNullable);
@@ -203,5 +197,63 @@ describe('IdeaComponent', () => {
     );
     expect(toastService.success).toHaveBeenCalledWith('Your idea was submitted.');
     expect(router.navigate).toHaveBeenCalledWith(['/tracking/status']);
+  });
+
+  it('prefills an amendment and resubmits the same idea at its expected version', async () => {
+    routeIdeaId = 'idea-123';
+    routeParams.next({ get: (_name: string) => routeIdeaId });
+    const existingForm = buildIdeaForm(new FormBuilder().nonNullable);
+    existingForm.patchValue(answers);
+    const existingIdea: Idea = {
+      ...toNewIdea(existingForm, authenticatedUser.uid, 'Casey Example'),
+      id: 'idea-123',
+      category: null,
+      similarityCheck: null,
+      automatedReview: null,
+      status: 'needs_amendment',
+      version: 4,
+      createdAt: null,
+      submittedAt: null,
+      updatedAt: null,
+    };
+    userDataService.getIdeaById.mockResolvedValue(existingIdea);
+
+    const fixture = TestBed.createComponent(IdeaComponent);
+    fixture.detectChanges();
+    await vi.waitFor(() => expect(userDataService.getIdeaById).toHaveBeenCalledWith('idea-123'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Update and resubmit your idea');
+    const formModel = Reflect.get(fixture.componentInstance, 'form') as ReturnType<
+      typeof buildIdeaForm
+    >;
+    expect(formModel.getRawValue()).toEqual(answers);
+
+    const continueStep = async (): Promise<void> => {
+      const next = fixture.nativeElement.querySelector('.actions .primary') as HTMLButtonElement;
+      next.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    };
+    for (let index = 0; index < 5; index += 1) {
+      await continueStep();
+    }
+
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    const EventConstructor = form.ownerDocument.defaultView?.Event;
+    if (!EventConstructor) throw new Error('Could not access the form event constructor.');
+    form.dispatchEvent(new EventConstructor('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+
+    const expectedForm = buildIdeaForm(new FormBuilder().nonNullable);
+    expectedForm.patchValue(answers);
+    expect(userDataService.resubmitIdea).toHaveBeenCalledWith(
+      'idea-123',
+      4,
+      toNewIdea(expectedForm, authenticatedUser.uid, 'Casey Example'),
+    );
+    expect(userDataService.createIdea).not.toHaveBeenCalled();
+    expect(toastService.success).toHaveBeenCalledWith('Your updated idea was resubmitted.');
   });
 });

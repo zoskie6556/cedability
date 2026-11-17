@@ -1,9 +1,20 @@
+@if (loadingIdea()) {
+  <section class="page" aria-live="polite">
+    <app-idea-loader label="Loading your idea for resubmission" />
+  </section>
+} @else if (ideaLoadError(); as error) {
+  <section class="page" aria-labelledby="update-error-title">
+    <h1 id="update-error-title">Update unavailable</h1>
+    <p class="error" role="alert">{{ error }}</p>
+    <a class="tracking-link" routerLink="/tracking/status">Return to tracking</a>
+  </section>
+} @else {
 <section class="page" aria-labelledby="idea-heading">
-  <h1 id="idea-heading">Submit your idea</h1>
-  <p class="lead">
-    Answer in your own words. Short, honest answers are fine. You can stop at any time: we keep
-    your answers on this device so you can come back.
-  </p>
+  <h1 id="idea-heading">{{ pageHeading() }}</h1>
+  <p class="lead">{{ pageLead() }}</p>
+  @if (isResubmission()) {
+    <p class="note">Your existing plan has been prefilled. The updated submission will be screened again.</p>
+  }
 
   <div class="language">
     <label for="language">Language I will speak in</label>
@@ -222,17 +233,24 @@
       }
     }
 
+    @if (submissionError(); as error) {
+      <p class="error" role="alert">{{ error }}</p>
+    }
+
     @if (submitting()) {
-      <app-idea-loader label="Submitting your idea" />
+      <app-idea-loader [label]="isResubmission() ? 'Resubmitting your idea' : 'Submitting your idea'" />
     }
 
     <div class="actions">
       <button type="button" class="secondary" [disabled]="step() === 0 || submitting()" (click)="back()">Back</button>
       @if (isLastStep()) {
-        <button type="submit" class="primary" [disabled]="submitting()">Send my idea</button>
+        <button type="submit" class="primary" [disabled]="submitting()">
+          {{ isResubmission() ? 'Update and resubmit' : 'Send my idea' }}
+        </button>
       } @else {
-        <button type="button" class="primary" (click)="next()">Next</button>
+        <button type="button" class="primary" [disabled]="submitting()" (click)="next()">Next</button>
       }
     </div>
   </form>
 </section>
+}

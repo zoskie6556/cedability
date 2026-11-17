@@ -16,6 +16,7 @@ import {
   where,
   writeBatch,
 } from '@angular/fire/firestore';
+import { Functions, httpsCallable } from '@angular/fire/functions';
 import { Timestamp } from 'firebase/firestore';
 import { isIdeaCategory } from '../../shared/models/automated-review.model';
 import { parseEvaluationCriteriaSet } from '../../shared/models/idea-evaluation.model';
@@ -40,6 +41,8 @@ import {
   type AutomatedReviewStatus,
   type IdeaCategory,
   type Idea,
+  type IdeaFeedback,
+  type IdeaFeedbackReply,
   type IdeaFeasibilityPlan,
   type IdeaFinancingPlan,
   type IdeaMarketPlan,
@@ -54,6 +57,7 @@ import type { User } from '../../shared/models/user.model';
 @Injectable({ providedIn: 'root' })
 export class UserDataService {
   private readonly firestore = inject(Firestore);
+  private readonly functions = inject(Functions);
 
   async createUserDocument(uid: string, email: string, fullName: string): Promise<void> {
     const userRef = doc(this.firestore, 'users', uid);
@@ -127,6 +131,8 @@ export class UserDataService {
     const document = await addDoc(ideaCollection, {
       ...idea,
       status: 'submitted',
+      version: 1,
+      submittedAt: serverTimestamp(),
       aiAnalysisConsentAt: serverTimestamp(),
       automatedReview: {
         status: 'queued',
@@ -147,6 +153,54 @@ export class UserDataService {
     });
 
     return document.id;
+  }
+
+  async requestIdeaChanges(
+    ideaId: string,
+    assignmentId: string,
+    stageId: string,
+    message: string,
+  ): Promise<void> {
+    const callable = httpsCallable<
+      { ideaId: string; assignmentId: string; stageId: string; message: string },
+      { feedbackId: string }
+    >(this.functions, 'requestIdeaChanges');
+    await callable({ ideaId, assignmentId, stageId, message: message.trim() });
+  }
+
+  async resubmitIdea(
+    ideaId: string,
+    expectedVersion: number,
+    idea: NewIdea,
+  ): Promise<{ ideaId: string; version: number }> {
+    const callable = httpsCallable<
+      { ideaId: string; expectedVersion: number; idea: NewIdea },
+      { ideaId: string; version: number }
+    >(this.functions, 'resubmitIdea');
+    const result = await callable({ ideaId, expectedVersion, idea });
+    return result.data;
+  }
+
+  async getFeedbackForIdea(ideaId: string): Promise<IdeaFeedback[]> {
+    const feedbackQuery = query(
+      collection(this.firestore, 'ideas', ideaId, 'feedback'),
+      orderBy('createdAt', 'asc'),
+    );
+    const snapshot = await getDocs(feedbackQuery);
+    return snapshot.docs.map((feedbackDocument) =>
+      this.parseIdeaFeedback(ideaId, feedbackDocument.id, feedbackDocument.data()),
+    );
+  }
+
+  async replyToFeedback(ideaId: string, feedbackId: string, message: string): Promise<void> {
+    const cleanMessage = message.trim();
+    if (!cleanMessage || cleanMessage.length > 2000) {
+      throw new Error('Your reply must be between 1 and 2000 characters.');
+    }
+
+    await updateDoc(doc(this.firestore, 'ideas', ideaId, 'feedback', feedbackId), {
+      reply: { message: cleanMessage, at: serverTimestamp() },
+    });
   }
 
   async getIdeasForUser(uid: string): Promise<Idea[]> {
@@ -485,6 +539,11 @@ export class UserDataService {
 
   private parseIdea(id: string, value: unknown): Idea {
     const idea = requireRecord(value, 'idea');
+    const createdAt = requireTimestampOrNull(idea['createdAt'], 'createdAt');
+    const submittedAt =
+      idea['submittedAt'] === undefined
+        ? createdAt
+        : requireTimestampOrNull(idea['submittedAt'], 'submittedAt');
 
     return {
       id,
@@ -504,8 +563,38 @@ export class UserDataService {
       similarityCheck: parseSimilarityCheck(idea['similarityCheck']),
       automatedReview: parseAutomatedReview(idea['automatedReview']),
       status: requireIdeaStatus(idea['status']),
-      createdAt: requireTimestampOrNull(idea['createdAt'], 'createdAt'),
+      version: requireIdeaVersion(idea['version']),
+      createdAt,
+      submittedAt,
       updatedAt: requireTimestampOrNull(idea['updatedAt'], 'updatedAt'),
+    };
+  }
+
+  private parseIdeaFeedback(ideaId: string, id: string, value: unknown): IdeaFeedback {
+    const feedback = requireRecord(value, 'idea feedback');
+    const rawReply = feedback['reply'];
+    let reply: IdeaFeedbackReply | null = null;
+    if (rawReply !== null && rawReply !== undefined) {
+      const parsedReply = requireRecord(rawReply, 'idea feedback reply');
+      reply = {
+        message: requireString(parsedReply['message'], 'reply message'),
+        at: requireTimestampOrNull(parsedReply['at'], 'reply timestamp'),
+      };
+    }
+
+    return {
+      id,
+      ideaId,
+      stageId: requireString(feedback['stageId'], 'stageId'),
+      evaluatorUid: requireString(feedback['evaluatorUid'], 'evaluatorUid'),
+      evaluatorName: requireString(feedback['evaluatorName'], 'evaluatorName'),
+      message: requireString(feedback['message'], 'feedback message'),
+      requiresResubmission: requireBoolean(
+        feedback['requiresResubmission'],
+        'requiresResubmission',
+      ),
+      reply,
+      createdAt: requireTimestampOrNull(feedback['createdAt'], 'feedback createdAt'),
     };
   }
 
@@ -585,6 +674,16 @@ function requireNumber(value: unknown, fieldName: string): number {
     throw new Error(`The Firestore ${fieldName} value is not a number.`);
   }
 
+  return value;
+}
+
+function requireIdeaVersion(value: unknown): number {
+  if (value === undefined) {
+    return 1;
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error('The Firestore idea version is invalid.');
+  }
   return value;
 }
 

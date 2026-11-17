@@ -34,10 +34,13 @@ export class EvaluateIdeaComponent implements OnInit {
   protected readonly isLoading = signal(true);
   protected readonly isSaving = signal(false);
   protected readonly isPostingQuestion = signal(false);
+  protected readonly isRequestingChanges = signal(false);
   protected readonly loadError = signal<string | null>(null);
   protected readonly saveError = signal<string | null>(null);
   protected readonly questionError = signal<string | null>(null);
+  protected readonly changesError = signal<string | null>(null);
   protected readonly questionDraft = signal('');
+  protected readonly changesNote = signal('');
 
   protected readonly form = new FormGroup({
     scores: new FormRecord<FormControl<number | null>>({}),
@@ -134,6 +137,50 @@ export class EvaluateIdeaComponent implements OnInit {
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) {
       this.questionDraft.set(target.value);
+    }
+  }
+
+  protected onChangesNoteInput(event: Event): void {
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement) {
+      this.changesNote.set(target.value);
+    }
+  }
+
+  protected async requestChanges(): Promise<void> {
+    const context = this.context();
+    const message = this.changesNote().trim();
+    if (!context || this.isRequestingChanges() || this.isSaving()) {
+      return;
+    }
+    if (!message || message.length > 500) {
+      this.changesError.set('Write a reason of no more than 500 characters.');
+      return;
+    }
+
+    this.isRequestingChanges.set(true);
+    this.changesError.set(null);
+    try {
+      const user = await this.authService.getCurrentUser();
+      if (!user) {
+        throw new Error('You must be signed in to request changes.');
+      }
+      await this.userDataService.requestIdeaChanges(
+        context.assignment.ideaId,
+        context.assignment.id,
+        context.assignment.stageId,
+        message,
+      );
+      this.toastService.success(
+        'Your feedback was saved. The submitter can view it in tracking; email alerts are not configured yet.',
+      );
+      await this.router.navigate(['/evaluation/worklist']);
+    } catch (error) {
+      const message = this.messageFrom(error, 'We could not save the requested changes.');
+      this.changesError.set(message);
+      this.toastService.error(message);
+    } finally {
+      this.isRequestingChanges.set(false);
     }
   }
 

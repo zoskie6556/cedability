@@ -59,6 +59,7 @@
 .advisory-card,
 .panel-card,
 .scoring-card,
+.changes-card,
 .questions-card,
 .state-card {
   padding: clamp(1rem, 3vw, 1.6rem);
@@ -72,6 +73,7 @@
 .advisory-card h2,
 .panel-card h2,
 .scoring-card h2,
+.changes-card h2,
 .questions-card h2,
 .state-card h1 {
   margin: 0 0 0.8rem;
@@ -108,6 +110,7 @@
 .advisory-card p,
 .advisory-card ul,
 .panel-card p,
+.changes-card p,
 .questions-card p {
   color: #493832;
   font-size: 0.9rem;
@@ -142,6 +145,8 @@
 
 .scoring-card,
 .scoring-card form,
+.changes-card,
+.changes-form,
 .questions-card,
 .question-form {
   display: grid;
@@ -171,7 +176,8 @@
 
 .criterion-card label,
 .form-field,
-.question-form label {
+.question-form label,
+.changes-form label {
   display: grid;
   gap: 0.45rem;
   color: #352620;
@@ -181,7 +187,8 @@
 .criterion-card input,
 .form-field textarea,
 .form-field select,
-.question-form textarea {
+.question-form textarea,
+.changes-form textarea {
   width: 100%;
   min-height: 44px;
   padding: 0.65rem 0.75rem;
@@ -196,6 +203,7 @@
 .form-field textarea:focus-visible,
 .form-field select:focus-visible,
 .question-form textarea:focus-visible,
+.changes-form textarea:focus-visible,
 .primary-button:focus-visible,
 .secondary-button:focus-visible,
 .back-link:focus-visible {

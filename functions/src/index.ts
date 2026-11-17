@@ -1,6 +1,10 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { onCall } from 'firebase-functions/v2/https';
 import {
+  requestIdeaChanges as requestIdeaChangesHandler,
+  resubmitIdea as resubmitIdeaHandler,
+} from './idea-feedback';
+import {
   createUserAccount as createUserAccountHandler,
   deleteUserAccount as deleteUserAccountHandler,
   recomputeStats as recomputeStatsHandler,
@@ -20,3 +24,6 @@ export const resendInvite = onCall(async request => resendInviteHandler(request)
 export const deleteUserAccount = onCall(async request => deleteUserAccountHandler(request));
 export const recomputeStats = onCall(async request => recomputeStatsHandler(request));
 export { onIdeaCreated } from './idea-screening';
+export { onIdeaResubmitted } from './idea-screening';
+export const requestIdeaChanges = onCall(async request => requestIdeaChangesHandler(request));
+export const resubmitIdea = onCall(async request => resubmitIdeaHandler(request));

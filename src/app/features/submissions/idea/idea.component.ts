@@ -15,8 +15,8 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Auth, user } from '@angular/fire/auth';
 import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { debounceTime } from 'rxjs';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { debounceTime, map } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
@@ -32,6 +32,7 @@ import {
   newCostGroup,
   newMilestoneGroup,
   sumCosts,
+  toIdeaFormValue,
   toNewIdea,
 } from './idea-form';
 
@@ -51,7 +52,7 @@ const CURRENCIES = ['BWP', 'USD', 'ZAR'] as const;
  */
 @Component({
   selector: 'app-idea',
-  imports: [ReactiveFormsModule, DecimalPipe, IdeaFieldComponent, IdeaLoaderComponent],
+  imports: [ReactiveFormsModule, DecimalPipe, RouterLink, IdeaFieldComponent, IdeaLoaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './idea.component.html',
   styleUrl: './idea.component.scss',
@@ -62,6 +63,7 @@ export class IdeaComponent {
   private readonly userData = inject(UserDataService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly drafts = inject(IdeaDraftService);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -80,9 +82,19 @@ export class IdeaComponent {
   protected readonly language = signal<string>(LANGUAGES[0].tag);
   protected readonly submitting = signal(false);
   protected readonly draftRestored = signal(false);
+  protected readonly loadingIdea = signal(
+    this.route.snapshot.paramMap.get('ideaId') !== null,
+  );
+  protected readonly ideaLoadError = signal<string | null>(null);
+  protected readonly submissionError = signal<string | null>(null);
+  protected readonly loadedVersion = signal<number | null>(null);
 
   private readonly stepHeading = viewChild<ElementRef<HTMLElement>>('stepHeading');
   private readonly authUser = toSignal(user(this.auth), { initialValue: null });
+  private readonly routeIdeaId = toSignal(
+    this.route.paramMap.pipe(map((params) => params.get('ideaId'))),
+    { initialValue: this.route.snapshot.paramMap.get('ideaId') },
+  );
   // Form controls are not signals, so we mirror the form's value into one. Everything
   // below (meter, totals, step ticks) is `computed` from it and updates by itself.
   private readonly formValue = toSignal(this.form.valueChanges, {
@@ -90,6 +102,15 @@ export class IdeaComponent {
   });
 
   protected readonly currentStep = computed(() => STEPS[this.step()]);
+  protected readonly isResubmission = computed(() => this.routeIdeaId() !== null);
+  protected readonly pageHeading = computed(() =>
+    this.isResubmission() ? 'Update and resubmit your idea' : 'Submit your idea',
+  );
+  protected readonly pageLead = computed(() =>
+    this.isResubmission()
+      ? 'Review the evaluator feedback, update the prefilled plan, and resubmit it for screening.'
+      : 'Answer in your own words. Short, honest answers are fine. You can stop at any time: we keep your answers on this device so you can come back.',
+  );
   protected readonly isLastStep = computed(() => this.step() === STEPS.length - 1);
   protected readonly totalFunding = computed(() =>
     sumCosts(this.formValue().financing?.costs ?? []),
@@ -104,16 +125,24 @@ export class IdeaComponent {
     return STEPS.map((s) => this.form.controls[s.key].valid);
   });
 
-  private restoredFor: string | null = null;
+  private loadedRouteKey = '';
   private submitted = false;
 
   constructor() {
-    // Restore an unfinished draft once we know who the user is.
     effect(() => {
       const uid = this.authUser()?.uid;
-      if (!uid || uid === this.restoredFor) return;
-      this.restoredFor = uid;
-      untracked(() => this.restoreDraft(uid));
+      const ideaId = this.routeIdeaId();
+      if (!uid) return;
+      const routeKey = `${uid}:${ideaId ?? 'new'}`;
+      if (routeKey === this.loadedRouteKey) return;
+      this.loadedRouteKey = routeKey;
+      if (ideaId) {
+        untracked(() => void this.loadIdeaForResubmission(uid, ideaId));
+      } else {
+        this.loadingIdea.set(false);
+        this.ideaLoadError.set(null);
+        untracked(() => this.restoreDraft(uid));
+      }
     });
 
     // Autosave 1.5 s after the user stops typing. The consent tick is never saved.
@@ -121,7 +150,7 @@ export class IdeaComponent {
       .pipe(debounceTime(1500), takeUntilDestroyed())
       .subscribe(() => {
         const uid = this.authUser()?.uid;
-        if (!uid || this.submitted) return;
+        if (!uid || this.submitted || this.routeIdeaId() !== null) return;
         const raw = this.form.getRawValue();
         this.drafts.save(
           uid,
@@ -189,6 +218,7 @@ export class IdeaComponent {
   // ---- drafts ---------------------------------------------------------------
 
   protected startFresh(): void {
+    if (this.isResubmission()) return;
     const uid = this.authUser()?.uid;
     if (uid) this.drafts.clear(uid);
     this.resizeRows(1, 1);
@@ -218,6 +248,30 @@ export class IdeaComponent {
     }
   }
 
+  private async loadIdeaForResubmission(uid: string, ideaId: string): Promise<void> {
+    this.loadingIdea.set(true);
+    this.ideaLoadError.set(null);
+    this.loadedVersion.set(null);
+    try {
+      const idea = await this.userData.getIdeaById(ideaId);
+      if (!idea || idea.ownerId !== uid || idea.status !== 'needs_amendment') {
+        throw new Error('This idea is not available for resubmission.');
+      }
+
+      this.resizeRows(idea.financingPlan.costs.length, idea.milestones.length);
+      this.form.patchValue(toIdeaFormValue(idea));
+      this.loadedVersion.set(idea.version);
+      this.furthest.set(STEPS.length - 1);
+    } catch (error: unknown) {
+      console.error('Could not load idea for resubmission', error);
+      const message = 'We could not load this idea for resubmission. Return to tracking and try again.';
+      this.ideaLoadError.set(message);
+      this.toast.error(message);
+    } finally {
+      this.loadingIdea.set(false);
+    }
+  }
+
   private resizeRows(costRows: number, milestoneRows: number): void {
     while (this.costs.length < Math.max(1, costRows)) this.costs.push(newCostGroup(this.fb));
     while (this.costs.length > Math.max(1, costRows)) this.costs.removeAt(this.costs.length - 1);
@@ -233,6 +287,7 @@ export class IdeaComponent {
 
   protected async submit(): Promise<void> {
     if (this.submitting()) return;
+    this.submissionError.set(null);
     // Pressing Enter in a field must never send the idea early.
     if (!this.isLastStep()) {
       this.next();
@@ -261,14 +316,29 @@ export class IdeaComponent {
     try {
       const profile = await this.userData.getOrCreateUser(authUser);
       const ownerName = profile.fullName.trim() || 'Applicant';
-      await this.userData.createIdea(toNewIdea(this.form, authUser.uid, ownerName));
+      const idea = toNewIdea(this.form, authUser.uid, ownerName);
+      const ideaId = this.routeIdeaId();
+      if (ideaId) {
+        const version = this.loadedVersion();
+        if (version === null) {
+          throw new Error('The idea version is unavailable. Reload the form before resubmitting.');
+        }
+        await this.userData.resubmitIdea(ideaId, version, idea);
+      } else {
+        await this.userData.createIdea(idea);
+      }
       this.submitted = true;
-      this.drafts.clear(authUser.uid);
-      this.toast.success('Your idea was submitted.');
+      if (!ideaId) this.drafts.clear(authUser.uid);
+      this.toast.success(ideaId ? 'Your updated idea was resubmitted.' : 'Your idea was submitted.');
       await this.router.navigate(['/tracking/status']);
     } catch (error) {
       console.error('Idea submission failed', error);
-      this.toast.error('We could not submit your idea. Your answers are saved, please try again.');
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'We could not submit your idea. Your answers are saved, please try again.';
+      this.submissionError.set(message);
+      this.toast.error(message);
     } finally {
       this.submitting.set(false);
     }

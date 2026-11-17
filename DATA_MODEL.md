@@ -9,7 +9,7 @@ users/{uid}
   └── notifications/{notificationId}
 
 ideas/{ideaId}
-  ├── versions/{versionId}          # snapshot on every (re)submission
+  ├── versions/{version}            # immutable snapshot of the superseded submission
   ├── statusHistory/{entryId}       # timeline shown to the submitter
   ├── feedback/{feedbackId}         # evaluator feedback + submitter reply
   ├── evaluations/{evaluatorUid}   # scores (hidden from submitter)
@@ -67,22 +67,24 @@ Every document has `createdAt` and `updatedAt` (Firestore `Timestamp`). Field na
 | ownerId | string | user UID |
 | ownerName | string | denormalized for list views |
 | title | string | |
-| summary | string | short text for lists |
 | category | `health` \| `agriculture` \| `tech` \| `business` \| `marketing` \| `sales` \| `other` \| null | Set by the idea-created Function; clients cannot write it. |
 | similarityCheck | map? | Server-computed keyword/Jaccard check; scans up to 500 plans and stores up to 5 matches. |
 | automatedReview | map? | Advisory `AutomatedReviewReport`; clients may create only the fixed empty `queued` envelope. Functions own `running`, `complete` and `failed` results. |
-| answers | map | answers to the dynamic form, keyed by field key |
-| formDefinitionId / formVersion | string / number | which form was used |
-| attachments | array<map> | `{ name, storagePath, contentType, size }` (keep small, max ~10) |
+| problem / proposedSolution | string | Required plan text |
+| intendedBeneficiaries / plannedLocation | string | Required audience and location |
+| marketPlan | map | `{ targetMarket, alternatives, differentiation, marketValidation }` |
+| feasibilityPlan | map | `{ technicalApproach, operationalPlan, validationEvidence, assumptions, risks }` |
+| financingPlan | map | `{ currency, totalFundingNeeded, fundingSources, costs[] }`; total is the sum of costs |
+| milestones | array<map> | `{ title, targetDate, successMeasure, estimatedCost? }` (1–10 rows) |
+| aiAnalysisConsent / aiAnalysisConsentAt | boolean / Timestamp | Consent and server timestamp for advisory screening |
 | status | string | see section 4 |
-| currentStageId | string? | |
-| version | number | increments on resubmission |
-| submittedAt | Timestamp? | |
+| version | number | Starts at 1 and increments on every resubmission; legacy documents without it are read as version 1. |
+| submittedAt | Timestamp | Server timestamp for the current submitted version |
 
 Subcollections:
-- **versions/{versionId}**: `{ version, answers, title, submittedAt }`
+- **versions/{version}**: immutable prior submission snapshot containing `{ version, title, problem, proposedSolution, intendedBeneficiaries, plannedLocation, marketPlan, feasibilityPlan, financingPlan, milestones, aiAnalysisConsent, submittedAt, archivedAt }`. The owner may read snapshots; only Functions write them.
 - **statusHistory/{entryId}**: `{ from, to, stageId?, byUid, byRole, note?, at }`
-- **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: boolean, reply?: { message, at }, createdAt }`
+- **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: true, reply: null | { message, at }, createdAt }`. Functions write evaluator feedback and status history atomically; the owner may read it and add one reply. Email delivery is deferred until the team selects an outbound email provider; the in-app notification and tracking view are available meanwhile.
 - **evaluations/{stageId_evaluatorUid}**: `{ stageId, evaluatorUid, scores: { [criterionId]: number }, comments, total, submittedAt }` (submitter cannot read)
 - **adjudications/{stageId}**: `{ stageId, adjudicatorUid, decision: 'advance'|'reject'|'revise', finalScore, note, decidedAt }`
 
@@ -149,7 +151,7 @@ Labels, help text, health colours, and valid transitions are defined in `idea-wo
 
 Legacy idea statuses are normalized when read: `draft` -> `submitted`, `under-review` / `under_review` -> `human_review`, `needs-revision` / `needs_revision` / `feedback_requested` -> `needs_amendment`, `revised` -> `ai_screening`, `accepted` -> `approved`, and `declined` -> `rejected`. Drafts in the submission form are saved locally and are not new Firestore ideas; a newly created idea starts as `submitted`.
 
-Status changes go through a Cloud Function (or a rules-restricted write), which also writes `statusHistory`, a notification and an audit log entry. **Do not set `status` freely from components.**
+Status changes go through a Cloud Function (or a rules-restricted write), which also writes `statusHistory`, a notification and an audit log entry. Evaluator change requests require a written note and create feedback; owner resubmissions archive the prior version, increment `version`, and restart screening. **Do not set `status` freely from components.**
 
 ## 5. Who reads and writes what
 

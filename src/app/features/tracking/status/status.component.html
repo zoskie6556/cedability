@@ -88,6 +88,82 @@
           } @else {
             <p class="closed-notice">This submission is closed.</p>
           }
+
+          @if (idea.status === 'needs_amendment') {
+            <section class="feedback-section" [attr.aria-labelledby]="'feedback-title-' + idea.id">
+              <h3 [id]="'feedback-title-' + idea.id">Feedback and resubmission</h3>
+              <p class="email-notice">
+                Email alerts are not configured yet. Check this tracking page for feedback.
+              </p>
+              @if (feedbackLoading()[idea.id]) {
+                <app-idea-loader label="Loading evaluator feedback" />
+              } @else if (feedbackErrors()[idea.id]; as feedbackError) {
+                <p class="feedback-error" role="alert">{{ feedbackError }}</p>
+              } @else {
+                @let feedbackItems = feedbackByIdea()[idea.id] ?? [];
+                @if (feedbackItems.length === 0) {
+                  <p>No evaluator feedback is available yet. You can still update the plan based on the automated review.</p>
+                } @else {
+                  <ol class="feedback-list">
+                    @for (feedback of feedbackItems; track feedback.id) {
+                      @let replyId = replyKey(idea.id, feedback.id);
+                      <li class="feedback-item">
+                        <p class="feedback-byline">
+                          {{ feedback.evaluatorName }}
+                          @if (feedback.createdAt; as createdAt) {
+                            · <time [attr.datetime]="createdAt.toDate().toISOString()">
+                              {{ createdAt.toDate() | date: 'medium' }}
+                            </time>
+                          }
+                        </p>
+                        <p>{{ feedback.message }}</p>
+                        @if (feedback.reply; as reply) {
+                          <div class="submitter-reply">
+                            <h4>Your reply</h4>
+                            <p>{{ reply.message }}</p>
+                            @if (reply.at; as repliedAt) {
+                              <time [attr.datetime]="repliedAt.toDate().toISOString()">
+                                {{ repliedAt.toDate() | date: 'medium' }}
+                              </time>
+                            }
+                          </div>
+                        } @else {
+                          <form class="reply-form" (ngSubmit)="sendReply(idea.id, feedback.id)">
+                            <label [for]="'reply-' + replyId">Reply to this feedback</label>
+                            <textarea
+                              [id]="'reply-' + replyId"
+                              rows="3"
+                              maxlength="2000"
+                              required
+                              [value]="replyDrafts()[replyId] ?? ''"
+                              (input)="onReplyInput(idea.id, feedback.id, $event)"
+                            ></textarea>
+                            @if (replyErrors()[replyId]) {
+                              <p class="feedback-error" role="alert">{{ replyErrors()[replyId] }}</p>
+                            }
+                            @if (replyingTo() === replyId) {
+                              <app-idea-loader label="Sending your reply" />
+                            }
+                            <button
+                              class="tracking-button"
+                              type="submit"
+                              [disabled]="replyingTo() !== null || !(replyDrafts()[replyId] ?? '').trim()"
+                              [attr.aria-busy]="replyingTo() === replyId"
+                            >
+                              Send reply
+                            </button>
+                          </form>
+                        }
+                      </li>
+                    }
+                  </ol>
+                }
+              }
+              <a class="tracking-button" [routerLink]="['/submissions/idea', idea.id, 'update']">
+                Update and resubmit
+              </a>
+            </section>
+          }
         </article>
       }
     </div>

@@ -218,6 +218,38 @@
         </form>
       </section>
 
+      <section class="changes-card" aria-labelledby="request-changes-title">
+        <h2 id="request-changes-title">Request changes</h2>
+        <p>Give the submitter a specific reason and explain what they need to clarify or update.</p>
+        <form (submit)="requestChanges(); $event.preventDefault()" class="changes-form">
+          <label for="request-changes-note">Reason for requested changes (required)</label>
+          <textarea
+            id="request-changes-note"
+            rows="4"
+            maxlength="500"
+            required
+            aria-describedby="request-changes-help"
+            [value]="changesNote()"
+            (input)="onChangesNoteInput($event)"
+          ></textarea>
+          <p id="request-changes-help">Maximum 500 characters. A written note is required.</p>
+          @if (changesError()) {
+            <p class="field-error" role="alert">{{ changesError() }}</p>
+          }
+          @if (isRequestingChanges()) {
+            <app-idea-loader label="Saving your feedback and returning the idea for changes" />
+          }
+          <button
+            class="secondary-button"
+            type="submit"
+            [disabled]="isRequestingChanges() || isSaving() || !changesNote().trim()"
+            [attr.aria-busy]="isRequestingChanges()"
+          >
+            Request changes
+          </button>
+        </form>
+      </section>
+
       <section class="questions-card" aria-labelledby="questions-title">
         <h2 id="questions-title">Applicant questions and responses</h2>
         @if (questions().length === 0) {
@@ -237,7 +269,7 @@
           </ol>
         }
 
-        <form (ngSubmit)="askQuestion()" class="question-form">
+        <form (submit)="askQuestion(); $event.preventDefault()" class="question-form">
           <label for="evaluator-question">Ask the applicant for clarification</label>
           <textarea
             id="evaluator-question"

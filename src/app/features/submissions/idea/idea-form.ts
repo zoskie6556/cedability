@@ -7,7 +7,7 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
-import type { NewIdea } from '../../../shared/models/idea.model';
+import type { Idea, NewIdea } from '../../../shared/models/idea.model';
 
 /**
  * The idea form's STRUCTURE, validation and mapping, kept out of the component so it
@@ -193,5 +193,26 @@ export function toNewIdea(form: IdeaFormGroup, ownerId: string, ownerName: strin
       estimatedCost: m.estimatedCost,
     })),
     aiAnalysisConsent: v.consent.aiAnalysis,
+  };
+}
+
+export function toIdeaFormValue(idea: Idea): ReturnType<IdeaFormGroup['getRawValue']> {
+  return {
+    basics: {
+      title: idea.title,
+      problem: idea.problem,
+      proposedSolution: idea.proposedSolution,
+      intendedBeneficiaries: idea.intendedBeneficiaries,
+      plannedLocation: idea.plannedLocation,
+    },
+    market: { ...idea.marketPlan },
+    feasibility: { ...idea.feasibilityPlan },
+    financing: {
+      currency: idea.financingPlan.currency,
+      fundingSources: idea.financingPlan.fundingSources,
+      costs: idea.financingPlan.costs.map((cost) => ({ ...cost })),
+    },
+    milestones: idea.milestones.map((milestone) => ({ ...milestone })),
+    consent: { aiAnalysis: idea.aiAnalysisConsent },
   };
 }
