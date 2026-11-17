@@ -10,6 +10,7 @@ import { Router, RouterLink } from '@angular/router';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { CollaborationService } from '../../../core/services/collaboration.service';
+import { NewsletterSubscriptionService } from '../../../core/services/newsletter-subscription.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
 import type {
@@ -30,6 +31,7 @@ import type { User } from '../../../shared/models/user.model';
 export class UserDashboardComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly collaborationService = inject(CollaborationService);
+  private readonly newsletterSubscriptionService = inject(NewsletterSubscriptionService);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
   private readonly userDataService = inject(UserDataService);
@@ -49,6 +51,13 @@ export class UserDashboardComponent implements OnInit {
   protected readonly incomingRequests = signal<CollaborationRequestView[]>([]);
   protected readonly outgoingRequests = signal<CollaborationRequestView[]>([]);
   protected readonly collaborators = signal<AcceptedCollaborator[]>([]);
+  protected readonly isNewsletterLoading = signal(true);
+  protected readonly isNewsletterSaving = signal(false);
+  protected readonly newsletterLoadError = signal<string | null>(null);
+  protected readonly newsletterError = signal<string | null>(null);
+  protected readonly newsletterSuccess = signal<string | null>(null);
+  protected readonly newsletterOptIn = signal(false);
+  protected readonly promotionsOptIn = signal(false);
 
   ngOnInit(): void {
     void this.loadDashboard();
@@ -83,6 +92,7 @@ export class UserDashboardComponent implements OnInit {
 
       this.currentUser = user;
       this.fullName.set(user.fullName.trim() || authUser.displayName?.trim() || 'there');
+      void this.loadNewsletterPreferences(user.uid);
       await this.loadCollaboration(user);
     } catch {
       this.loadError.set('We could not load your dashboard. Check your connection and try again.');
@@ -137,6 +147,55 @@ export class UserDashboardComponent implements OnInit {
     if (target instanceof HTMLInputElement && this.currentUser) {
       await this.updateDirectoryVisibility(target.checked);
     }
+  }
+
+  protected setNewsletterOptIn(event: Event): void {
+    const target = event.target;
+    if (target instanceof HTMLInputElement) {
+      this.newsletterOptIn.set(target.checked);
+      this.newsletterSuccess.set(null);
+      this.newsletterError.set(null);
+    }
+  }
+
+  protected setPromotionsOptIn(event: Event): void {
+    const target = event.target;
+    if (target instanceof HTMLInputElement) {
+      this.promotionsOptIn.set(target.checked);
+      this.newsletterSuccess.set(null);
+      this.newsletterError.set(null);
+    }
+  }
+
+  protected async saveNewsletterPreferences(event?: Event): Promise<void> {
+    event?.preventDefault();
+    const uid = this.currentUser?.uid;
+    if (!uid || this.isNewsletterSaving() || this.newsletterLoadError()) {
+      return;
+    }
+
+    this.isNewsletterSaving.set(true);
+    this.newsletterError.set(null);
+    this.newsletterSuccess.set(null);
+    try {
+      await this.newsletterSubscriptionService.savePreferences(uid, {
+        newsletter: this.newsletterOptIn(),
+        promotions: this.promotionsOptIn(),
+      });
+      this.newsletterSuccess.set('Your email preferences have been saved.');
+      this.toastService.success('Your email preferences were saved.');
+    } catch {
+      this.newsletterError.set('We could not save your email preferences. Please try again.');
+      this.toastService.error('We could not save your email preferences. Please try again.');
+    } finally {
+      this.isNewsletterSaving.set(false);
+    }
+  }
+
+  protected async unsubscribeFromAll(): Promise<void> {
+    this.newsletterOptIn.set(false);
+    this.promotionsOptIn.set(false);
+    await this.saveNewsletterPreferences();
   }
 
   protected requestState(profile: CollaborationProfile): 'connected' | 'sent' | 'received' | null {
@@ -210,6 +269,32 @@ export class UserDashboardComponent implements OnInit {
       );
     } finally {
       this.isCollaborationLoading.set(false);
+    }
+  }
+
+  private async loadNewsletterPreferences(uid: string): Promise<void> {
+    this.isNewsletterLoading.set(true);
+    this.newsletterLoadError.set(null);
+    this.newsletterError.set(null);
+    this.newsletterSuccess.set(null);
+    try {
+      const preferences = await this.newsletterSubscriptionService.getPreferences(uid);
+      this.newsletterOptIn.set(preferences.newsletter);
+      this.promotionsOptIn.set(preferences.promotions);
+    } catch {
+      this.newsletterLoadError.set(
+        'We could not load your email preferences. Retry before changing them.',
+      );
+      this.toastService.error('We could not load your email preferences. Please try again.');
+    } finally {
+      this.isNewsletterLoading.set(false);
+    }
+  }
+
+  protected async retryNewsletterLoad(): Promise<void> {
+    const uid = this.currentUser?.uid;
+    if (uid) {
+      await this.loadNewsletterPreferences(uid);
     }
   }
 

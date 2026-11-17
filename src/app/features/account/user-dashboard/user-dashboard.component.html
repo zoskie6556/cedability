@@ -241,5 +241,99 @@
         </section>
       }
     </section>
+
+    <section class="newsletter-panel" aria-labelledby="newsletter-title">
+      <p class="dashboard-eyebrow">EMAIL PREFERENCES</p>
+      <h2 id="newsletter-title">Choose what you hear from us</h2>
+      <p class="newsletter-intro" id="newsletter-description">
+        Choose the newsletter, promotional updates, both, or neither. You can change your choices
+        or unsubscribe at any time.
+      </p>
+
+      @if (isNewsletterLoading()) {
+        <div class="collaboration-loading" aria-live="polite">
+          <app-idea-loader label="Loading email preferences" />
+        </div>
+      } @else if (newsletterLoadError()) {
+        <div class="newsletter-feedback" role="alert">
+          <p>{{ newsletterLoadError() }}</p>
+          <button
+            class="dashboard-button dashboard-button-secondary"
+            type="button"
+            (click)="retryNewsletterLoad()"
+          >
+            Retry
+          </button>
+        </div>
+      } @else {
+        <form class="newsletter-form" (submit)="saveNewsletterPreferences($event)">
+          <fieldset class="newsletter-options" [disabled]="isNewsletterSaving()">
+            <legend>Optional email updates</legend>
+            <label class="newsletter-option" for="newsletter-opt-in">
+              <input
+                id="newsletter-opt-in"
+                type="checkbox"
+                [checked]="newsletterOptIn()"
+                [disabled]="isNewsletterSaving()"
+                aria-describedby="newsletter-description"
+                (change)="setNewsletterOptIn($event)"
+              />
+              <span>
+                <strong>CEDABILITY newsletter</strong>
+                <small>News, stories, and helpful resources from CEDABILITY.</small>
+              </span>
+            </label>
+            <label class="newsletter-option" for="promotions-opt-in">
+              <input
+                id="promotions-opt-in"
+                type="checkbox"
+                [checked]="promotionsOptIn()"
+                [disabled]="isNewsletterSaving()"
+                aria-describedby="newsletter-description"
+                (change)="setPromotionsOptIn($event)"
+              />
+              <span>
+                <strong>Promotional updates</strong>
+                <small>Information about CEDABILITY programs, events, and opportunities.</small>
+              </span>
+            </label>
+          </fieldset>
+
+          <p class="newsletter-disclaimer">
+            These choices only save your preferences. This page does not send emails or indicate
+            that email delivery is enabled.
+          </p>
+
+          @if (newsletterError()) {
+            <p class="newsletter-error" role="alert">{{ newsletterError() }}</p>
+          }
+          @if (newsletterSuccess()) {
+            <p class="newsletter-success" role="status" aria-live="polite">
+              {{ newsletterSuccess() }}
+            </p>
+          }
+
+          <div class="newsletter-actions">
+            <button
+              class="dashboard-button dashboard-button-primary"
+              type="submit"
+              [disabled]="isNewsletterSaving()"
+            >
+              {{ isNewsletterSaving() ? 'Saving preferences...' : 'Save preferences' }}
+            </button>
+            <button
+              class="dashboard-button dashboard-button-secondary"
+              type="button"
+              [disabled]="
+                isNewsletterSaving() || (!newsletterOptIn() && !promotionsOptIn())
+              "
+              (click)="unsubscribeFromAll()"
+            >
+              Unsubscribe from all
+            </button>
+          </div>
+        </form>
+      }
+    </section>
   }
 </main>

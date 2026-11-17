@@ -4,6 +4,7 @@ import { provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CollaborationService } from '../../../core/services/collaboration.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { NewsletterSubscriptionService } from '../../../core/services/newsletter-subscription.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
 import type {
@@ -32,6 +33,10 @@ describe('UserDashboardComponent', () => {
     sendRequest: vi.fn(),
     respondToRequest: vi.fn(),
     cancelRequest: vi.fn(),
+  };
+  const newsletterSubscriptionService = {
+    getPreferences: vi.fn(),
+    savePreferences: vi.fn(),
   };
   const toastService = {
     error: vi.fn(),
@@ -85,6 +90,15 @@ describe('UserDashboardComponent', () => {
     collaborationService.sendRequest.mockReset().mockResolvedValue();
     collaborationService.respondToRequest.mockReset().mockResolvedValue();
     collaborationService.cancelRequest.mockReset().mockResolvedValue();
+    newsletterSubscriptionService.getPreferences.mockReset().mockResolvedValue({
+      newsletter: false,
+      promotions: false,
+      newsletterConsentedAt: null,
+      promotionsConsentedAt: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+    newsletterSubscriptionService.savePreferences.mockReset().mockResolvedValue();
     toastService.error.mockReset();
     toastService.success.mockReset();
 
@@ -94,6 +108,7 @@ describe('UserDashboardComponent', () => {
         provideRouter([]),
         { provide: AuthService, useValue: authService },
         { provide: CollaborationService, useValue: collaborationService },
+        { provide: NewsletterSubscriptionService, useValue: newsletterSubscriptionService },
         { provide: UserDataService, useValue: userDataService },
         { provide: ToastService, useValue: toastService },
       ],
@@ -143,6 +158,66 @@ describe('UserDashboardComponent', () => {
     );
     expect(visibilityInput?.checked).toBe(false);
     expect(visibilityInput?.getAttribute('aria-describedby')).toBe('directory-privacy');
+  });
+
+  it('starts both email options unchecked and saves them independently', async () => {
+    userDataService.getOrCreateUser.mockResolvedValue(makeUser(true));
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('#newsletter-opt-in')).not.toBeNull();
+    });
+
+    const newsletterInput: HTMLInputElement =
+      fixture.nativeElement.querySelector('#newsletter-opt-in');
+    const promotionsInput: HTMLInputElement =
+      fixture.nativeElement.querySelector('#promotions-opt-in');
+    expect(newsletterInput.checked).toBe(false);
+    expect(promotionsInput.checked).toBe(false);
+
+    newsletterInput.checked = true;
+    newsletterInput.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+    fixture.nativeElement
+      .querySelector('.newsletter-form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() =>
+      expect(newsletterSubscriptionService.savePreferences).toHaveBeenCalledWith(
+        'user-123',
+        { newsletter: true, promotions: false },
+      ),
+    );
+    expect(toastService.success).toHaveBeenCalledWith('Your email preferences were saved.');
+  });
+
+  it('lets a user unsubscribe from both email options', async () => {
+    newsletterSubscriptionService.getPreferences.mockResolvedValue({
+      newsletter: true,
+      promotions: true,
+      newsletterConsentedAt: null,
+      promotionsConsentedAt: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+    userDataService.getOrCreateUser.mockResolvedValue(makeUser(true));
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('#newsletter-opt-in')?.checked).toBe(true);
+    });
+
+    const unsubscribeButton = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+      (button: HTMLButtonElement) => button.textContent?.trim() === 'Unsubscribe from all',
+    );
+    unsubscribeButton?.click();
+
+    await vi.waitFor(() =>
+      expect(newsletterSubscriptionService.savePreferences).toHaveBeenCalledWith(
+        'user-123',
+        { newsletter: false, promotions: false },
+      ),
+    );
   });
 
   it('lets only the recipient accept a visible incoming request', async () => {

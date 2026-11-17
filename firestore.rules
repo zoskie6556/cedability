@@ -27,6 +27,8 @@
 // the user's display name and profession with normalized search keys.
 // collaborationPairs/{uidA~uidB}: one canonical relationship record for a
 // pair, with participant UIDs, request state and timestamps only.
+// users/{uid}/newsletterPreferences/current: the owner's private newsletter
+// and promotions choices, consent timestamps, and record timestamps only.
 // ===============================================================
 rules_version = '2';
 
@@ -690,6 +692,55 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    function isNullableTimestamp(value) {
+      return value == null || value is timestamp;
+    }
+
+    function isValidNewsletterPreferences(data) {
+      return data.keys().hasAll([
+          'newsletter',
+          'promotions',
+          'newsletterConsentedAt',
+          'promotionsConsentedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'newsletter',
+          'promotions',
+          'newsletterConsentedAt',
+          'promotionsConsentedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.newsletter is bool
+        && data.promotions is bool
+        && isNullableTimestamp(data.newsletterConsentedAt)
+        && isNullableTimestamp(data.promotionsConsentedAt)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function hasValidNewsletterConsentOnCreate(data) {
+      return (data.newsletter
+          ? data.newsletterConsentedAt == request.time
+          : data.newsletterConsentedAt == null)
+        && (data.promotions
+          ? data.promotionsConsentedAt == request.time
+          : data.promotionsConsentedAt == null);
+    }
+
+    function hasValidNewsletterConsentOnUpdate(data) {
+      return (data.newsletterConsentedAt == resource.data.newsletterConsentedAt
+          || (!resource.data.newsletter
+            && data.newsletter
+            && data.newsletterConsentedAt == request.time))
+        && (data.promotionsConsentedAt == resource.data.promotionsConsentedAt
+          || (!resource.data.promotions
+            && data.promotions
+            && data.promotionsConsentedAt == request.time));
+    }
+
     function isValidCollaborationUid(uid) {
       return uid is string
         && uid.size() > 0
@@ -871,6 +922,28 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /users/{userId}/newsletterPreferences/{preferencesId} {
+      allow get: if preferencesId == 'current'
+        && signedInAs(userId)
+        && isUser();
+      allow list: if false;
+      allow create: if preferencesId == 'current'
+        && signedInAs(userId)
+        && isUser()
+        && isValidNewsletterPreferences(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && hasValidNewsletterConsentOnCreate(request.resource.data);
+      allow update: if preferencesId == 'current'
+        && signedInAs(userId)
+        && isUser()
+        && isValidNewsletterPreferences(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && hasValidNewsletterConsentOnUpdate(request.resource.data);
       allow delete: if false;
     }
 
