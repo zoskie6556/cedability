@@ -656,6 +656,10 @@ export class UserDataService {
       version: requireIdeaVersion(idea['version']),
       createdAt,
       submittedAt,
+      statusEnteredAt:
+        idea['statusEnteredAt'] === undefined
+          ? null
+          : requireTimestampOrNull(idea['statusEnteredAt'], 'statusEnteredAt'),
       updatedAt: requireTimestampOrNull(idea['updatedAt'], 'updatedAt'),
     };
   }

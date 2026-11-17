@@ -79,6 +79,7 @@ Every document has `createdAt` and `updatedAt` (Firestore `Timestamp`). Field na
 | milestones | array<map> | `{ title, targetDate, successMeasure, estimatedCost? }` (1–10 rows) |
 | aiAnalysisConsent / aiAnalysisConsentAt | boolean / Timestamp | Consent and server timestamp for advisory screening |
 | status | string | see section 4 |
+| statusEnteredAt | Timestamp? | Server-set when the current status began; used for stage-duration reporting. Absent on legacy documents until their next status change. |
 | version | number | Starts at 1 and increments on every resubmission; legacy documents without it are read as version 1. |
 | submittedAt | Timestamp | Server timestamp for the current submitted version |
 
@@ -125,8 +126,9 @@ Evaluator worklist: `where('evaluatorUid','==',uid).where('status','!=','done')`
 An agent toggles their own `isAvailable` from the chat console; `activeChatCount` is incremented/decremented by the console as the agent claims/closes chats. Readable by any signed-in user (to decide whether live chat is offered); writable only by the agent themselves or an admin. Like other client-maintained counters in this app, `activeChatCount` is client-trusted, not Functions-verified.
 
 ### `stats/{docId}`  (written by Functions only)
-`stats/overview`: `{ totalIdeas, byStatus: {...}, byCategory: {...}, totalUsers, avgDaysPerStage: {...}, updatedAt }`
-Dashboards read these small documents. Never scan the whole `ideas` collection to draw a chart.
+`stats/overview` contains `{ totalIdeas, totalUsers, byStatus: { [status]: count }, byCategory: { [category]: count }, avgDaysPerStage: { [status]: days }, stageDurationDaysTotal: {...}, stageVisitCounts: {...}, evaluationOutcomes: { advance, revise, reject }, chatAnalytics: ChatAnalyticsSummary, updatedAt }`. `avgDaysPerStage` includes completed visits only; the two duration maps are the accumulated duration and completed-visit count used to maintain those averages. Evaluation outcomes count recorded adjudicator decisions. `chatAnalytics` uses the `ChatAnalyticsSummary` shape, with UTC dates/hours and a 30-day `chatsPerDay` window.
+
+The idea-transition Function updates status counts and stage durations atomically with every status change; it also adjusts category counts when a category is assigned and counts a new idea on its first transition. Adjudication transitions increment the corresponding decision outcome. The admin-only `recomputeStats` Function backfills/repairs the summary, including chat analytics and historical stage durations. Run it once after deploying these reporting fields for existing records. Dashboards read only `stats/overview` for aggregate reporting; never scan `ideas` from the client to draw a chart.
 
 ### `auditLogs/{logId}`  (append-only, Functions write only)
 `{ actorUid, actorRole, action, entityType, entityId, summary, at }`

@@ -36,6 +36,7 @@ export async function recordAdjudication(
       stageId: 'adjudication',
       auditAction: `idea.adjudication_${input.decision}`,
       auditSummary: `Adjudicator recorded the ${input.decision} decision.`,
+      evaluationOutcome: input.decision,
       validate: async (transaction, idea) => {
         if (idea.get('status') !== 'adjudication') {
           throw new HttpsError(

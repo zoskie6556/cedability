@@ -106,6 +106,7 @@ async function processNewIdea(
     'ai_screening',
     null,
     { automatedReview: createRunningReport(startedAt) },
+    { isNewIdea: true },
   );
   if (!transitioned) {
     logger.info('Idea screening skipped because another invocation already claimed it.', { ideaId });

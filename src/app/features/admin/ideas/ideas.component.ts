@@ -1,4 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  effect,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
 import {
   AdminIdeaAssignment,
@@ -7,11 +19,17 @@ import {
   EvaluatorOption,
 } from '../../../core/services/admin-idea.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { IDEA_STATUSES, STAGES, type IdeaStatus } from '../../../shared/workflow/idea-workflow';
+import {
+  allowedNextStatuses,
+  IDEA_STATUSES,
+  NOTE_REQUIRED,
+  STAGES,
+  type IdeaStatus,
+} from '../../../shared/workflow/idea-workflow';
 
 @Component({
   selector: 'app-admin-ideas',
-  imports: [IdeaLoaderComponent],
+  imports: [IdeaLoaderComponent, ReactiveFormsModule],
   templateUrl: './ideas.component.html',
   styleUrl: './ideas.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,6 +49,18 @@ export class IdeasComponent implements OnInit {
 
   readonly search = signal('');
   readonly statusFilter = signal<'all' | IdeaStatus>('all');
+  readonly pendingStatusChange = signal<{ idea: AdminIdeaRow; status: IdeaStatus } | null>(null);
+  readonly statusNoteControl = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.maxLength(500), Validators.pattern(/\S/)],
+  });
+  private readonly statusNoteTextarea = viewChild<ElementRef<HTMLTextAreaElement>>('statusNoteTextarea');
+  private readonly focusStatusNote = effect(() => {
+    if (this.pendingStatusChange()) {
+      this.statusNoteTextarea()?.nativeElement.focus();
+    }
+  });
+  private statusSelectToRestore: HTMLSelectElement | null = null;
 
   readonly counts = computed(() => {
     const all = this.service.ideas();
@@ -85,8 +115,23 @@ export class IdeasComponent implements OnInit {
   }
 
   async onStatusChange(event: Event, idea: AdminIdeaRow): Promise<void> {
-    const status = (event.target as HTMLSelectElement | null)?.value as IdeaStatus | undefined;
+    const select = event.target as HTMLSelectElement | null;
+    const status = select?.value as IdeaStatus | undefined;
     if (!status || status === idea.status) {
+      return;
+    }
+
+    if (!IDEA_STATUSES.includes(status)) {
+      return;
+    }
+
+    if (NOTE_REQUIRED.includes(status)) {
+      if (select) {
+        select.value = idea.status;
+        this.statusSelectToRestore = select;
+      }
+      this.statusNoteControl.setValue('');
+      this.pendingStatusChange.set({ idea, status });
       return;
     }
 
@@ -95,7 +140,46 @@ export class IdeasComponent implements OnInit {
       this.toast.success(`"${idea.title}" is now ${this.statusLabel(status).toLowerCase()}.`);
     } catch (error) {
       this.toast.error(this.messageFrom(error, 'Unable to update the idea status.'));
+    } finally {
+      if (select) select.value = idea.status;
     }
+  }
+
+  async confirmStatusChange(): Promise<void> {
+    const pending = this.pendingStatusChange();
+    const note = this.statusNoteControl.value.trim();
+    if (!pending || this.statusNoteControl.invalid || !note) {
+      this.statusNoteControl.markAsTouched();
+      return;
+    }
+
+    let updated = false;
+    try {
+      await this.service.setStatus(pending.idea, pending.status, note);
+      this.toast.success(
+        `"${pending.idea.title}" is now ${this.statusLabel(pending.status).toLowerCase()}.`,
+      );
+      this.pendingStatusChange.set(null);
+      updated = true;
+    } catch (error) {
+      this.toast.error(this.messageFrom(error, 'Unable to update the idea status.'));
+    } finally {
+      if (updated) this.restoreStatusFocus();
+    }
+  }
+
+  cancelStatusChange(): void {
+    this.pendingStatusChange.set(null);
+    this.restoreStatusFocus();
+  }
+
+  statusOptionsFor(idea: AdminIdeaRow): Array<{ value: IdeaStatus; label: string }> {
+    if (idea.status === 'adjudication') {
+      return [{ value: idea.status, label: STAGES[idea.status].label }];
+    }
+    return [idea.status, ...allowedNextStatuses(idea.status, 'admin')]
+      .filter(status => status !== 'awarded')
+      .map(status => ({ value: status, label: STAGES[status].label }));
   }
 
   async onAssign(event: Event, idea: AdminIdeaRow): Promise<void> {
@@ -179,5 +263,11 @@ export class IdeasComponent implements OnInit {
 
   private messageFrom(error: unknown, fallback: string): string {
     return error instanceof Error && error.message ? error.message : fallback;
+  }
+
+  private restoreStatusFocus(): void {
+    const select = this.statusSelectToRestore;
+    this.statusSelectToRestore = null;
+    queueMicrotask(() => select?.focus());
   }
 }

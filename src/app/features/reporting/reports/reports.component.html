@@ -1,123 +1,369 @@
-<main id="main-content" class="reports-page" [attr.aria-busy]="loading()">
+<main id="main-content" class="reports-page" [attr.aria-busy]="loading() || reportLoading()">
   <header class="reports-header">
     <p class="eyebrow">Reporting</p>
-    <h1>Chat analytics</h1>
-    <p>Live chat volume, response times and outcomes.</p>
+    <h1>Reporting dashboard</h1>
+    <p>
+      Portfolio, evaluation and chat summaries. Dashboard totals come from the reporting summary.
+    </p>
   </header>
 
   @if (loading()) {
-    <app-idea-loader label="Loading chat analytics" />
-  } @else if (!authorized()) {
-    <p class="reports-notice" role="alert">
-      You do not have access to this report. Support team and admin accounts only.
-    </p>
+    <app-idea-loader label="Loading reporting dashboard" />
   } @else {
     @if (error()) {
       <p class="reports-error" role="alert">{{ error() }}</p>
     }
 
-    <section class="stat-cards" aria-label="Chat summary">
-      <article class="stat-card">
-        <p class="stat-label">Total chats</p>
-        <p class="stat-value">{{ summary().totalChats }}</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-label">Resolution rate</p>
-        <p class="stat-value">{{ formatPercent(summary().resolutionRate) }}</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-label">Avg first response</p>
-        <p class="stat-value">{{ formatResponseTime(summary().avgFirstResponseSeconds) }}</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-label">Busiest hour</p>
-        <p class="stat-value">{{ busiestHour() !== null ? formatHour(busiestHour()!) : '—' }}</p>
-      </article>
-    </section>
+    @if (overview(); as data) {
+      <section class="stat-cards" aria-label="Portfolio summary">
+        <article class="stat-card">
+          <p class="stat-label">Total ideas</p>
+          <p class="stat-value">{{ data.totalIdeas }}</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Total users</p>
+          <p class="stat-value">{{ data.totalUsers }}</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Approved or awarded</p>
+          <p class="stat-value">{{ data.byStatus['approved'] + data.byStatus['awarded'] }}</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Total chats</p>
+          <p class="stat-value">{{ data.chatAnalytics?.totalChats ?? '—' }}</p>
+        </article>
+      </section>
 
-    <section class="report-section" aria-labelledby="status-breakdown-title">
-      <h2 id="status-breakdown-title">Chats by status</h2>
-      <table class="report-table">
-        <caption class="sr-only">Number and share of chats in each status</caption>
-        <thead>
-          <tr>
-            <th scope="col">Status</th>
-            <th scope="col">Chats</th>
-            <th scope="col">Share</th>
-          </tr>
-        </thead>
-        <tbody>
+      <section class="report-section" aria-labelledby="status-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="status-title">Ideas by status</h2>
+            <p>Current idea totals grouped by the canonical workflow status.</p>
+          </div>
+        </div>
+        <div class="bar-chart" aria-hidden="true">
           @for (row of statusRows(); track row.status) {
-            <tr>
-              <th scope="row">{{ row.label }}</th>
-              <td>{{ row.value }}</td>
-              <td>
-                <div class="status-bar-track" role="img" [attr.aria-label]="row.label + ': ' + row.percent + '%'">
-                  <div class="status-bar-fill" [class.status-waiting]="row.status === 'waiting'"
-                    [class.status-active]="row.status === 'active'"
-                    [class.status-closed]="row.status === 'closed'"
-                    [class.status-offline]="row.status === 'offline_message'"
-                    [style.width.%]="row.percent"></div>
-                </div>
-                {{ row.percent }}%
-              </td>
-            </tr>
+            <div class="bar-row">
+              <span>{{ row.label }}</span>
+              <span class="bar-track">
+                <span
+                  class="bar-fill"
+                  [style.width.%]="(row.value / maxStatusCount()) * 100"
+                ></span>
+              </span>
+            </div>
           }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="report-section" aria-labelledby="hourly-title">
-      <h2 id="hourly-title">Chats by hour of day</h2>
-      <div class="hour-chart" role="img" aria-labelledby="hourly-title">
-        @for (count of summary().chatsByHour; track $index) {
-          <span class="hour-bar" [style.height.%]="(count / maxHourCount()) * 100" [attr.title]="formatHour($index) + ': ' + count"></span>
-        }
-      </div>
-      <table class="report-table">
-        <caption class="sr-only">Chats started in each hour of the day</caption>
-        <thead>
-          <tr>
-            <th scope="col">Hour</th>
-            <th scope="col">Chats started</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (count of summary().chatsByHour; track $index) {
-            @if (count > 0) {
-              <tr>
-                <th scope="row">{{ formatHour($index) }}</th>
-                <td>{{ count }}</td>
-              </tr>
-            }
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="report-section" aria-labelledby="trend-title">
-      <h2 id="trend-title">Chats per day (last 30 days)</h2>
-      @if (chatsPerDayRows().length === 0) {
-        <p class="reports-empty">No chats were started in the last 30 days.</p>
-      } @else {
+        </div>
         <table class="report-table">
-          <caption class="sr-only">Number of chats started on each day</caption>
+          <caption class="sr-only">
+            Number and share of ideas in each workflow status
+          </caption>
           <thead>
             <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Chats started</th>
+              <th scope="col">Status</th>
+              <th scope="col">Ideas</th>
+              <th scope="col">Share</th>
             </tr>
           </thead>
           <tbody>
-            @for (row of chatsPerDayRows(); track row[0]) {
+            @for (row of statusRows(); track row.status) {
               <tr>
-                <th scope="row">{{ row[0] }}</th>
-                <td>{{ row[1] }}</td>
+                <th scope="row">{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+                <td>{{ row.percent }}%</td>
               </tr>
             }
           </tbody>
         </table>
-      }
-    </section>
+      </section>
+
+      <section class="report-section" aria-labelledby="category-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="category-title">Participation by category</h2>
+            <p>Submission counts and shares by idea category.</p>
+          </div>
+          <button
+            type="button"
+            class="download-button"
+            (click)="downloadOverviewCsv('participation')"
+          >
+            Download participation CSV
+          </button>
+        </div>
+        @if (categoryRows().length === 0) {
+          <p class="reports-empty">
+            No categorized ideas are included in the reporting summary yet.
+          </p>
+        } @else {
+          <div class="bar-chart" aria-hidden="true">
+            @for (row of categoryRows(); track row.category) {
+              <div class="bar-row">
+                <span>{{ row.label }}</span>
+                <span class="bar-track">
+                  <span
+                    class="bar-fill"
+                    [style.width.%]="(row.value / maxCategoryCount()) * 100"
+                  ></span>
+                </span>
+              </div>
+            }
+          </div>
+          <table class="report-table">
+            <caption class="sr-only">
+              Idea participation by category
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Category</th>
+                <th scope="col">Ideas</th>
+                <th scope="col">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of categoryRows(); track row.category) {
+                <tr>
+                  <th scope="row">{{ row.label }}</th>
+                  <td>{{ row.value }}</td>
+                  <td>{{ row.percent }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <section class="report-section" aria-labelledby="outcomes-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="outcomes-title">Adjudication outcomes</h2>
+            <p>Recorded adjudicator decisions; automated review is advisory only.</p>
+          </div>
+          <button type="button" class="download-button" (click)="downloadOverviewCsv('outcomes')">
+            Download outcomes CSV
+          </button>
+        </div>
+        <div class="bar-chart" aria-hidden="true">
+          @for (row of outcomeRows(); track row.key) {
+            <div class="bar-row">
+              <span>{{ row.label }}</span>
+              <span class="bar-track">
+                <span
+                  class="bar-fill"
+                  [style.width.%]="(row.value / maxOutcomeCount()) * 100"
+                ></span>
+              </span>
+            </div>
+          }
+        </div>
+        <table class="report-table">
+          <caption class="sr-only">
+            Counts of recorded adjudication decisions
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Outcome</th>
+              <th scope="col">Decisions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of outcomeRows(); track row.key) {
+              <tr>
+                <th scope="row">{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+
+      <section class="report-section" aria-labelledby="timeline-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="timeline-title">Average time per stage</h2>
+            <p>Average days spent in completed stage visits.</p>
+          </div>
+          <button type="button" class="download-button" (click)="downloadOverviewCsv('timelines')">
+            Download timelines CSV
+          </button>
+        </div>
+        <div class="bar-chart" aria-hidden="true">
+          @for (row of stageRows(); track row.status) {
+            <div class="bar-row">
+              <span>{{ row.label }}</span>
+              <span class="bar-track">
+                <span class="bar-fill" [style.width.%]="(row.days / maxStageDays()) * 100"></span>
+              </span>
+            </div>
+          }
+        </div>
+        <table class="report-table">
+          <caption class="sr-only">
+            Average days for completed visits to each stage
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">Average days</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of stageRows(); track row.status) {
+              <tr>
+                <th scope="row">{{ row.label }}</th>
+                <td>{{ formatDays(row.days) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+
+      <section class="report-section" aria-labelledby="idea-report-title">
+        <h2 id="idea-report-title">Download an idea report</h2>
+        <p>
+          Enter one idea ID to export its advisory automated review, evaluator feedback and status
+          history.
+        </p>
+        <form class="idea-report-form" (ngSubmit)="downloadIdeaReport()">
+          <label for="idea-id">Idea ID</label>
+          <input
+            id="idea-id"
+            type="text"
+            [formControl]="ideaIdControl"
+            [attr.aria-invalid]="ideaIdControl.touched && ideaIdControl.invalid ? 'true' : null"
+            [attr.aria-describedby]="
+              ideaIdControl.touched && ideaIdControl.invalid ? 'idea-id-error' : null
+            "
+            autocomplete="off"
+          />
+          @if (ideaIdControl.touched && ideaIdControl.invalid) {
+            <p class="field-error" id="idea-id-error">
+              Enter an idea ID of up to 128 characters without a slash.
+            </p>
+          }
+          <button
+            type="submit"
+            class="download-button"
+            [disabled]="reportLoading() || ideaIdControl.invalid"
+          >
+            @if (reportLoading()) {
+              Loading report…
+            } @else {
+              Download idea report
+            }
+          </button>
+        </form>
+        @if (reportLoading()) {
+          <app-idea-loader label="Preparing idea report" />
+        }
+        @if (reportError()) {
+          <p class="reports-error" role="alert">{{ reportError() }}</p>
+        }
+      </section>
+
+      <section class="report-section" aria-labelledby="chat-title">
+        <h2 id="chat-title">Chat analytics</h2>
+        @if (!chatAnalyticsAvailable()) {
+          <p class="reports-empty">
+            Chat analytics are not available in the reporting summary yet.
+          </p>
+        } @else {
+          <section class="stat-cards" aria-label="Chat summary">
+            <article class="stat-card">
+              <p class="stat-label">Total chats</p>
+              <p class="stat-value">{{ chatSummary().totalChats }}</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Resolution rate</p>
+              <p class="stat-value">{{ formatPercent(chatSummary().resolutionRate) }}</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Average first response</p>
+              <p class="stat-value">
+                {{ formatResponseTime(chatSummary().avgFirstResponseSeconds) }}
+              </p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Busiest hour (UTC)</p>
+              <p class="stat-value">
+                {{ busiestHour() !== null ? formatHour(busiestHour()!) : '—' }}
+              </p>
+            </article>
+          </section>
+
+          <h3>Chats by status</h3>
+          <table class="report-table">
+            <caption class="sr-only">
+              Number of chats in each status
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Status</th>
+                <th scope="col">Chats</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of statusChatRows(); track row.status) {
+                <tr>
+                  <th scope="row">{{ row.label }}</th>
+                  <td>{{ row.value }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <h3>Chats by hour of day (UTC)</h3>
+          <div class="hour-chart" aria-hidden="true">
+            @for (count of chatSummary().chatsByHour; track $index) {
+              <span class="hour-bar" [style.height.%]="(count / maxHourCount()) * 100"></span>
+            }
+          </div>
+          <table class="report-table">
+            <caption class="sr-only">
+              Chats started during each UTC hour of the day
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Hour (UTC)</th>
+                <th scope="col">Chats started</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (count of chatSummary().chatsByHour; track $index) {
+                <tr>
+                  <th scope="row">{{ formatHour($index) }}</th>
+                  <td>{{ count }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <h3>Chats per day (last 30 days)</h3>
+          @if (chatsPerDayRows().length === 0) {
+            <p class="reports-empty">No chats were started in the last 30 days.</p>
+          } @else {
+            <table class="report-table">
+              <caption class="sr-only">
+                Chats started on each date during the last 30 days
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Date (UTC)</th>
+                  <th scope="col">Chats started</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of chatsPerDayRows(); track row[0]) {
+                  <tr>
+                    <th scope="row">{{ row[0] }}</th>
+                    <td>{{ row[1] }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        }
+      </section>
+    }
   }
 </main>

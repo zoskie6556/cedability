@@ -1,5 +1,6 @@
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { Auth } from '@angular/fire/auth';
+import { Functions, httpsCallable } from '@angular/fire/functions';
 import {
   collection,
   doc,
@@ -51,6 +52,7 @@ export interface AdminIdeaAssignment {
 @Injectable({ providedIn: 'root' })
 export class AdminIdeaService {
   private readonly firestore = inject(Firestore);
+  private readonly functions = inject(Functions);
   private readonly auth = inject(Auth);
   private readonly userDataService = inject(UserDataService);
 
@@ -235,21 +237,13 @@ export class AdminIdeaService {
     await batch.commit();
   }
 
-  /** Changes the status and records the change in the idea's timeline in one atomic write. */
-  async setStatus(idea: AdminIdeaRow, status: IdeaStatus): Promise<void> {
-    const batch = writeBatch(this.firestore);
-
-    batch.update(doc(this.firestore, 'ideas', idea.id), { status, updatedAt: serverTimestamp() });
-    batch.set(doc(collection(this.firestore, 'ideas', idea.id, 'statusHistory')), {
-      from: idea.status,
-      to: status,
-      stageId: idea.stageId,
-      byUid: this.auth.currentUser?.uid ?? null,
-      byRole: 'admin',
-      at: serverTimestamp(),
-    });
-
-    await batch.commit();
+  /** Functions keep the workflow, audit log, notification, and reporting stats in sync. */
+  async setStatus(idea: AdminIdeaRow, status: IdeaStatus, note: string | null = null): Promise<void> {
+    const changeStatus = httpsCallable<
+      { ideaId: string; status: IdeaStatus; note: string | null; stageId: string | null },
+      { ideaId: string; status: string }
+    >(this.functions, 'setIdeaStatus');
+    await changeStatus({ ideaId: idea.id, status, note, stageId: idea.stageId });
   }
 
   private toRow(id: string, data: DocumentData): AdminIdeaRow {

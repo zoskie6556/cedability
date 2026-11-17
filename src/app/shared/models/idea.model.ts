@@ -64,6 +64,7 @@ export interface IdeaDocument {
   version: number;
   createdAt: Timestamp | null;
   submittedAt: Timestamp | null;
+  statusEnteredAt?: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 

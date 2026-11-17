@@ -1,6 +1,7 @@
 import {
   FieldValue,
   getFirestore,
+  Timestamp,
   type DocumentData,
   type DocumentSnapshot,
   type DocumentReference,
@@ -21,6 +22,7 @@ import type {
 } from '../shared/automated-review.model';
 import { createAuditLogRecord } from './audit';
 import { HttpsError } from 'firebase-functions/v2/https';
+import { maintainOverviewOnTransition, type EvaluationOutcome } from '../stats/overview';
 
 export interface IdeaTransitionUpdates {
   category?: IdeaCategory | null;
@@ -34,6 +36,8 @@ export interface IdeaTransitionOptions {
   ideaFields?: DocumentData;
   auditAction?: string;
   auditSummary?: string;
+  isNewIdea?: boolean;
+  evaluationOutcome?: EvaluationOutcome;
   validate?: (transaction: Transaction, current: DocumentSnapshot) => Promise<void>;
   write?: (transaction: Transaction, current: DocumentSnapshot) => void;
 }
@@ -89,15 +93,34 @@ export async function transitionIdea(
       );
     }
 
-    const notificationRef = db
-      .collection('users')
-      .doc(ownerId)
-      .collection('notifications')
-      .doc();
+    const notificationRef = db.collection('users').doc(ownerId).collection('notifications').doc();
+    const changedAt = Timestamp.now();
     await options.validate?.(transaction, current);
+    let statusEnteredAt = current.get('statusEnteredAt');
+    if (statusEnteredAt === null || statusEnteredAt === undefined) {
+      const history = await transaction.get(
+        ideaRef.collection('statusHistory').orderBy('at', 'desc').limit(1),
+      );
+      const latestChange = history.docs[0];
+      statusEnteredAt =
+        latestChange?.get('to') === from
+          ? latestChange.get('at')
+          : current.get('submittedAt') ?? current.get('createdAt');
+    }
+    await maintainOverviewOnTransition(transaction, db.doc('stats/overview'), {
+      from,
+      to,
+      oldCategory: current.get('category'),
+      newCategory: updates.category === undefined ? current.get('category') : updates.category,
+      enteredAt: statusEnteredAt,
+      changedAt,
+      isNewIdea: options.isNewIdea ?? false,
+      evaluationOutcome: options.evaluationOutcome,
+    });
     const update: DocumentData = {
       ...options.ideaFields,
       status: to,
+      statusEnteredAt: changedAt,
       updatedAt: FieldValue.serverTimestamp(),
     };
     if (updates.category !== undefined) update['category'] = updates.category;

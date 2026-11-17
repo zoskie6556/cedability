@@ -16,6 +16,8 @@ import {
   awardApprovedIdea as awardApprovedIdeaHandler,
   recordAdjudication as recordAdjudicationHandler,
 } from './idea-adjudication';
+import { getIdeaReport as getIdeaReportHandler } from './reporting';
+import { setIdeaStatus as setIdeaStatusHandler } from './idea-admin';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -33,3 +35,5 @@ export const requestIdeaChanges = onCall(async request => requestIdeaChangesHand
 export const resubmitIdea = onCall(async request => resubmitIdeaHandler(request));
 export const recordAdjudication = onCall(async request => recordAdjudicationHandler(request));
 export const awardApprovedIdea = onCall(async request => awardApprovedIdeaHandler(request));
+export const getIdeaReport = onCall(async request => getIdeaReportHandler(request));
+export const setIdeaStatus = onCall(async request => setIdeaStatusHandler(request));

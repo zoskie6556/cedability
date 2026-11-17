@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  width: min(980px, calc(100% - 2rem));
+  width: min(1080px, calc(100% - 2rem));
   margin: 0 auto;
   padding: clamp(1.5rem, 4vw, 3rem) 0;
 }
@@ -37,13 +37,16 @@
   color: var(--ceda-deep, #4d211b);
 }
 
-.reports-header p:last-child {
-  margin: 0;
+.reports-header p:last-child,
+.section-heading p,
+.report-section > p {
+  margin: 0.25rem 0 0;
   color: var(--muted, #6d625d);
 }
 
 .reports-notice,
-.reports-error {
+.reports-error,
+.field-error {
   margin: 0;
   padding: 0.85rem 1rem;
   border-radius: 0.6rem;
@@ -52,6 +55,7 @@
 }
 
 .reports-empty {
+  margin: 0.5rem 0;
   color: var(--muted, #6d625d);
   font-size: 0.9rem;
 }
@@ -89,10 +93,58 @@
   background: #fff;
 }
 
-.report-section h2 {
+.report-section h2,
+.report-section h3 {
   margin: 0 0 0.85rem;
-  font-size: 1.05rem;
   color: var(--ceda-deep, #4d211b);
+}
+
+.report-section h3 {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-heading h2 {
+  margin-bottom: 0.25rem;
+}
+
+.section-heading p {
+  margin-top: 0;
+}
+
+.download-button {
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 2px solid var(--ceda-primary, #9b2f0e);
+  border-radius: 0.6rem;
+  background: var(--ceda-primary, #9b2f0e);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.download-button:hover:not(:disabled) {
+  background: #8f2d10;
+}
+
+.download-button:focus-visible,
+.idea-report-form input:focus-visible {
+  outline: 3px solid #1d5e83;
+  outline-offset: 3px;
+}
+
+.download-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .report-table {
@@ -102,9 +154,9 @@
 
 .report-table th,
 .report-table td {
-  padding: 0.5rem 0.6rem;
+  padding: 0.65rem 0.6rem;
   text-align: left;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   border-bottom: 1px solid var(--line, #eadfd8);
 }
 
@@ -116,37 +168,61 @@
   letter-spacing: 0.04em;
 }
 
-.status-bar-track {
-  display: inline-block;
-  width: 120px;
-  height: 0.55rem;
+.bar-chart {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1.1rem 0;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(100px, 2fr);
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--ceda-deep, #4d211b);
+  font-size: 0.88rem;
+}
+
+.bar-track {
+  display: block;
+  height: 0.7rem;
   border-radius: 999px;
   background: #f1e7df;
   overflow: hidden;
-  vertical-align: middle;
-  margin-right: 0.5rem;
 }
 
-.status-bar-fill {
+.bar-fill {
+  display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: inherit;
   background: var(--ceda-primary, #c53e13);
 }
 
-.status-bar-fill.status-waiting {
-  background: #d98a1b;
+.idea-report-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
-.status-bar-fill.status-active {
-  background: #246548;
+.idea-report-form label {
+  flex-basis: 100%;
+  font-weight: 700;
 }
 
-.status-bar-fill.status-closed {
-  background: var(--ceda-deep, #4d211b);
+.idea-report-form input {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #766b64;
+  border-radius: 0.5rem;
+  font: inherit;
 }
 
-.status-bar-fill.status-offline {
-  background: #8d291b;
+.field-error {
+  flex-basis: 100%;
 }
 
 .hour-chart {
@@ -154,7 +230,7 @@
   align-items: flex-end;
   gap: 0.2rem;
   height: 120px;
-  margin-bottom: 1rem;
+  margin: 0.5rem 0 1rem;
   padding: 0 0.25rem;
 }
 
@@ -165,9 +241,28 @@
   background: var(--ceda-accent, #f2b643);
 }
 
+@media (max-width: 640px) {
+  .section-heading {
+    flex-direction: column;
+  }
+
+  .report-section {
+    padding: 1rem;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 0.55rem 0.4rem;
+  }
+
+  .bar-row {
+    grid-template-columns: minmax(110px, 1fr) minmax(75px, 1fr);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .hour-bar,
-  .status-bar-fill {
+  .bar-fill,
+  .hour-bar {
     transition: none;
   }
 }
