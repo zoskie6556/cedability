@@ -357,4 +357,9 @@ export class IdeaComponent {
       { injector: this.injector },
     );
   }
+
+  saveDraft(){
+    console.log("Draft Saved");
+    
+  }
 }

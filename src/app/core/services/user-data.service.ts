@@ -207,14 +207,46 @@ export class UserDataService {
     });
   }
 
+  // async getIdeasForUser(uid: string): Promise<Idea[]> {
+  //   const ideaCollection = collection(this.firestore, 'ideas');
+  //   const userIdeasQuery = query(ideaCollection, where('ownerId', '==', uid));
+  //   const snapshot = await getDocs(userIdeasQuery);
+
+  //   const ideas = snapshot.docs.map((ideaDocument) => this.parseIdea(ideaDocument.id, ideaDocument.data()));
+  //   console.log("User's Ideas:", ideas);
+    
+  //   return this.sortIdeasByLatestUpdate(ideas);
+  // }
+
   async getIdeasForUser(uid: string): Promise<Idea[]> {
     const ideaCollection = collection(this.firestore, 'ideas');
     const userIdeasQuery = query(ideaCollection, where('ownerId', '==', uid));
     const snapshot = await getDocs(userIdeasQuery);
 
-    return this.sortIdeasByLatestUpdate(
-      snapshot.docs.map((ideaDocument) => this.parseIdea(ideaDocument.id, ideaDocument.data())),
-    );
+    console.log(`[UserDataService] Found ${snapshot.docs.length} raw idea docs for UID: ${uid}`);
+
+    const parsedIdeas: Idea[] = [];
+    const failedDocs: { id: string; error: unknown; rawData: unknown }[] = [];
+
+    for (const ideaDocument of snapshot.docs) {
+      const rawData = ideaDocument.data();
+      console.log(`[UserDataService] Raw Idea [${ideaDocument.id}] JSON:`, JSON.stringify(rawData, null, 2));
+
+      try {
+        const parsed = this.parseIdea(ideaDocument.id, rawData);
+        parsedIdeas.push(parsed);
+      } catch (err) {
+        console.error(`[UserDataService] ❌ Failed to parse idea [${ideaDocument.id}]:`, err);
+        failedDocs.push({ id: ideaDocument.id, error: err, rawData });
+      }
+    }
+
+    if (failedDocs.length > 0 && parsedIdeas.length === 0) {
+      // Re-throw if every single idea failed so the UI still shows the error state
+      throw failedDocs[0].error;
+    }
+
+    return this.sortIdeasByLatestUpdate(parsedIdeas);
   }
 
   watchIdeasForUser(
@@ -764,11 +796,18 @@ function requireBoolean(value: unknown, fieldName: string): boolean {
 }
 
 function requireNumber(value: unknown, fieldName: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`The Firestore ${fieldName} value is not a number.`);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
   }
 
-  return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  throw new Error(`The Firestore ${fieldName} value is not a number.`);
 }
 
 function requireIdeaVersion(value: unknown): number {
@@ -863,7 +902,7 @@ function parseFinancingPlan(value: unknown): IdeaFinancingPlan {
 }
 
 function parseMilestones(value: unknown): IdeaMilestone[] {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return [];
   }
   if (!Array.isArray(value)) {
@@ -873,12 +912,16 @@ function parseMilestones(value: unknown): IdeaMilestone[] {
   return value.map((value) => {
     const milestone = requireRecord(value, 'milestone');
     const estimatedCost = milestone['estimatedCost'];
+    const isEmpty =
+      estimatedCost === null ||
+      estimatedCost === undefined ||
+      (typeof estimatedCost === 'string' && estimatedCost.trim() === '');
+
     return {
       title: requireString(milestone['title'], 'title'),
       targetDate: requireString(milestone['targetDate'], 'targetDate'),
       successMeasure: requireString(milestone['successMeasure'], 'successMeasure'),
-      estimatedCost:
-        estimatedCost === null ? null : requireNumber(estimatedCost, 'estimatedCost'),
+      estimatedCost: isEmpty ? null : requireNumber(estimatedCost, 'estimatedCost'),
     };
   });
 }

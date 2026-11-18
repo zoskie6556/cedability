@@ -602,7 +602,7 @@
 
           @if (ideasError()) {
             <p class="auth-error" role="alert">{{ ideasError() }}</p>
-            <button class="text-button" type="button" (click)="loadProfile()">Try loading again</button>
+            <button class="text-button" type="button" (click)="retryLoadIdeas()">Try loading again</button>
           } @else if (ideas().length === 0) {
             <div class="empty-ideas">
               <h3>Your next idea starts here</h3>
