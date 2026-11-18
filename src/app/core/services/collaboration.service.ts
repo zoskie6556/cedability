@@ -109,26 +109,40 @@ export class CollaborationService {
     }
 
     const directory = collection(this.firestore, DIRECTORY_COLLECTION);
+
+    // Simplified queries targeting only the collection and the search range field.
+    // This avoids complex Firestore composite index errors.
     const searchField = (field: 'displayNameSearch' | 'professionSearch') =>
       query(
         directory,
-        where('discoverable', '==', true),
         where(field, '>=', prefix),
         where(field, '<=', `${prefix}\uf8ff`),
         limit(SEARCH_RESULT_LIMIT),
       );
+
     const [byName, byProfession] = await Promise.all([
       getDocs(searchField('displayNameSearch')),
       getDocs(searchField('professionSearch')),
     ]);
+
     const profiles = new Map<string, CollaborationProfile>();
 
     for (const snapshot of [...byName.docs, ...byProfession.docs]) {
+      // Exclude the current user
       if (snapshot.id !== uid) {
-        const profile = parseCollaborationProfile(snapshot.id, snapshot.data());
-        profiles.set(profile.uid, profile);
+        try {
+          const profile = parseCollaborationProfile(snapshot.id, snapshot.data());
+          
+          // Ensure they are discoverable in-memory
+          const data = snapshot.data();
+          if (data['discoverable'] === true) {
+            profiles.set(profile.uid, profile);
+          }
+        } catch (e) {
+          console.warn(`Skipping invalid profile ${snapshot.id}:`, e);
+        }
       }
-    }
+    } 
 
     return [...profiles.values()].sort((left, right) =>
       left.displayName.localeCompare(right.displayName),

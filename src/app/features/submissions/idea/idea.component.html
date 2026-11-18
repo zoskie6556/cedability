@@ -4,336 +4,755 @@
   </section>
 } @else if (ideaLoadError(); as error) {
   <section class="page" aria-labelledby="update-error-title">
-    <h1 id="update-error-title">Update unavailable</h1>
-    <p class="error" role="alert">{{ error }}</p>
-    <a class="tracking-link" routerLink="/tracking/status">Return to tracking</a>
+    <div class="error-card">
+      <svg class="icon icon-lg icon-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <circle cx="12" cy="16" r="1" fill="currentColor" />
+      </svg>
+      <h1 id="update-error-title">Update unavailable</h1>
+      <p class="error" role="alert">{{ error }}</p>
+      <a class="tracking-link" routerLink="/tracking/status">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M19 12H5" />
+          <path d="m12 19-7-7 7-7" />
+        </svg>
+        Return to tracking
+      </a>
+    </div>
   </section>
 } @else {
-<section class="page" aria-labelledby="idea-heading">
-  <h1 id="idea-heading">{{ pageHeading() }}</h1>
-  <p class="lead">{{ pageLead() }}</p>
-  @if (isResubmission()) {
-    <p class="note">Your existing plan has been prefilled. The updated submission will be screened again.</p>
-  }
+  <section class="page" aria-labelledby="idea-heading">
+    <header class="page-header">
+      <div>
+        <h1 id="idea-heading">{{ pageHeading() }}</h1>
+        <p class="lead">{{ pageLead() }}</p>
+      </div>
+      <div class="top-utility">
+        <button
+          type="button"
+          class="secondary draft-btn"
+          [disabled]="submitting() || screeningLoading()"
+          (click)="openDraftViewer()"
+          title="View or restore saved draft"
+        >
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span>View draft</span>
+        </button>
 
-  <div class="language">
-    <label for="language">Language I will speak in</label>
-    <select id="language" [value]="language()" (change)="setLanguage($event)">
-      @for (l of languages; track l.tag) {
-        <option [value]="l.tag" [selected]="l.tag === language()">{{ l.label }}</option>
-      }
-    </select>
-    @if (!language().startsWith('en')) {
-      <p class="note">
-        Your idea must be sent in English. Please check that the text is in English before you send
-        it. Automatic translation is coming soon.
+        <button
+          type="button"
+          class="secondary draft-btn"
+          [disabled]="submitting() || screeningLoading()"
+          (click)="saveDraft()"
+          title="Save draft locally on your device"
+        >
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
+          </svg>
+          <span>Save draft</span>
+        </button>
+      </div>
+    </header>
+
+    @if (isResubmission()) {
+      <p class="note anim-fade-in">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <span>Your existing plan has been prefilled. The updated submission will be screened again.</span>
       </p>
     }
-  </div>
 
-  @if (draftRestored()) {
-    <div class="banner" role="status">
-      <p>We restored the idea you were working on.</p>
-      <button type="button" class="secondary" (click)="startFresh()">Start a new idea instead</button>
+    <!-- Active Guidance / Hint Banner after AI screening recommendations -->
+    @if (aiGuidanceActive()) {
+      <div class="banner guidance-banner anim-slide-down" role="region" aria-label="AI Screening Guidance">
+        <div class="banner-text">
+          <svg class="icon icon-md icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <div>
+            <strong>AI Recommendations Applied:</strong>
+            <p>Please review and improve the highlighted fields. <strong>Remember to save your draft</strong> as you edit!</p>
+          </div>
+        </div>
+        <div class="guidance-actions">
+          <button type="button" class="secondary" (click)="saveDraft()">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            <span>Save draft</span>
+          </button>
+          <button type="button" class="secondary" (click)="dismissAiGuidance()">Dismiss</button>
+        </div>
+      </div>
+    }
+
+    <div class="controls-bar">
+      <div class="language">
+        <label for="language">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h20" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+          <span>Language I will speak in</span>
+        </label>
+        <select id="language" [value]="language()" (change)="setLanguage($event)">
+          @for (l of languages; track l.tag) {
+            <option [value]="l.tag" [selected]="l.tag === language()">{{ l.label }}</option>
+          }
+        </select>
+        @if (!language().startsWith('en')) {
+          <p class="note anim-fade-in">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>
+              Your idea must be sent in English. Please check that the text is in English before you send
+              it. Automatic translation is coming soon.
+            </span>
+          </p>
+        }
+      </div>
+    </div>
+
+    @if (draftRestored()) {
+      <div class="banner anim-slide-down" role="status">
+        <div class="banner-text">
+          <svg class="icon icon-md icon-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <p>We restored the idea you were working on.</p>
+        </div>
+        <button type="button" class="secondary" (click)="startFresh()">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+          <span>Start a new idea instead</span>
+        </button>
+      </div>
+    }
+
+    <div class="meter">
+      <div class="meter-header">
+        <p id="meter-label">Form completeness</p>
+        <strong class="meter-pct">{{ completeness() }}%</strong>
+      </div>
+      <div class="track" role="progressbar" [attr.aria-valuenow]="completeness()" aria-valuemin="0"
+        aria-valuemax="100" aria-labelledby="meter-label">
+        <div class="bar" [style.width.%]="completeness()"></div>
+      </div>
+    </div>
+
+    <nav aria-label="Steps in this form">
+      <ol class="steps">
+        @for (s of steps; track s.key; let i = $index) {
+          <li>
+            <button
+              type="button"
+              [class.active]="step() === i"
+              [class.done]="stepComplete()[i]"
+              [class.future]="i > furthest()"
+              [disabled]="i > furthest()"
+              [attr.aria-current]="step() === i ? 'step' : null"
+              (click)="goTo(i)"
+            >
+              <span class="step-badge">
+                @if (stepComplete()[i]) {
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                } @else {
+                  {{ i + 1 }}
+                }
+              </span>
+              <span class="step-label">{{ s.label }}</span>
+            </button>
+          </li>
+        }
+      </ol>
+    </nav>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="step-card anim-step-enter">
+        <h2 #stepHeading tabindex="-1">
+          <span class="step-badge-lg">{{ step() + 1 }}</span>
+          <span>{{ currentStep().label }}</span>
+        </h2>
+        <p class="intro">{{ currentStep().intro }}</p>
+
+        @switch (currentStep().key) {
+          @case ('basics') {
+            <app-idea-field id="title" label="Name of your idea"
+              hint="A short name people will remember. Example: Solar cold rooms for farmers in the Okavango."
+              [control]="form.controls.basics.controls.title" [maxLength]="limits.title"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="problem" label="What problem are you solving?" [multiline]="true"
+              hint="Who is struggling, with what, and how often? Example: Vegetables rot within two days because there is no cold storage."
+              [control]="form.controls.basics.controls.problem" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="solution" label="What is your solution?" [multiline]="true"
+              hint="Explain it as if you were telling a friend. What will people see, use or buy?"
+              [control]="form.controls.basics.controls.proposedSolution" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="beneficiaries" label="Who will benefit?" [multiline]="true" [rows]="3"
+              hint="Example: 200 small-scale farmers and 15 local shops."
+              [control]="form.controls.basics.controls.intendedBeneficiaries" [maxLength]="limits.short"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="location" label="Where will you do this?"
+              hint="Town, village or district. Example: Francistown, North-East District."
+              [control]="form.controls.basics.controls.plannedLocation" [maxLength]="limits.short"
+              [voice]="true" [language]="language()" />
+
+            <section class="attachments" aria-labelledby="attachments-heading">
+              <h3 id="attachments-heading">Have something that helps tell your story?</h3>
+              <p class="attachment-intro">
+                Add a sketch, photo, quote, or supporting document. It is optional, and you can keep going without one.
+              </p>
+              <div
+                class="attachment-dropzone"
+                [class.is-dragging]="isDraggingFiles()"
+                (dragover)="onAttachmentDragOver($event)"
+                (dragleave)="onAttachmentDragLeave($event)"
+                (drop)="onAttachmentDrop($event)"
+              >
+                <input
+                  id="idea-attachments"
+                  class="attachment-input"
+                  type="file"
+                  multiple
+                  [attr.accept]="attachmentAccept"
+                  [attr.aria-describedby]="'attachment-help attachment-error'"
+                  [attr.aria-invalid]="attachmentError() ? 'true' : null"
+                  [disabled]="submitting() || removingAttachment()"
+                  (change)="onAttachmentSelection($event)"
+                />
+                <label class="attachment-prompt" for="idea-attachments">
+                  <span class="upload-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+                    </svg>
+                  </span>
+                  <span class="drop-title">Drop your files here</span>
+                  <span class="drop-browse">or <span>choose files</span></span>
+                </label>
+              </div>
+              <p id="attachment-help" class="attachment-help">
+                PDF, images, Word, Excel, PowerPoint, CSV, or text · up to {{ attachmentLimits.count }} files ·
+                {{ attachmentLimits.sizeMb }} MB each. We will upload them when you send your idea. Attachments metadata
+                is preserved with your saved draft.
+              </p>
+              <p id="attachment-error" class="error" aria-live="polite">
+                @if (attachmentError(); as error) { {{ error }} }
+              </p>
+
+              @if (existingAttachments().length > 0) {
+                <div class="attachment-existing">
+                  <h4>Already attached to this idea</h4>
+                  <ul>
+                    @for (attachment of existingAttachments(); track attachment.id) {
+                      <li>{{ attachment.name }} <span>({{ attachment.contentType }})</span></li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              @if (selectedAttachments().length > 0) {
+                <ul class="attachment-list" aria-label="Files selected for your idea" aria-live="polite">
+                  @for (selected of selectedAttachments(); track selected.file.name + selected.file.lastModified; let i = $index) {
+                    <li class="attachment-item">
+                      <span class="attachment-type" aria-hidden="true">{{ attachmentCategory(selected.file) }}</span>
+                      <span class="attachment-details">
+                        <strong>{{ selected.file.name }}</strong>
+                        <span>{{ attachmentCategory(selected.file) }} · {{ attachmentSize(selected.file) }}</span>
+                      </span>
+                      <button
+                        type="button"
+                        class="remove-attachment"
+                        [disabled]="submitting() || removingAttachment()"
+                        [attr.aria-label]="'Remove ' + selected.file.name"
+                        (click)="removeSelectedAttachment(i)"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+          }
+
+          @case ('market') {
+            <app-idea-field id="target-market" label="Who are your customers or users?" [multiline]="true"
+              hint="Describe them: who they are, how many, where they are."
+              [control]="form.controls.market.controls.targetMarket" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="alternatives" label="What do people use today instead?" [multiline]="true"
+              hint="Other products, shops or habits. If you think there is nothing, say what people do now."
+              [control]="form.controls.market.controls.alternatives" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="differentiation" label="Why will people choose yours?" [multiline]="true"
+              hint="Cheaper, faster, closer, easier, better quality? Be specific."
+              [control]="form.controls.market.controls.differentiation" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="validation" label="How do you know people want this?" [multiline]="true"
+              hint="Who have you asked? What did they say? A survey, a trial or a first sale all count."
+              [control]="form.controls.market.controls.marketValidation" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+          }
+
+          @case ('feasibility') {
+            <app-idea-field id="technical" label="How will you build or deliver it?" [multiline]="true"
+              hint="Tools, equipment, skills and suppliers you will use."
+              [control]="form.controls.feasibility.controls.technicalApproach" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="operations" label="How will it run day to day?" [multiline]="true"
+              hint="Who does what, where, and how often?"
+              [control]="form.controls.feasibility.controls.operationalPlan" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="evidence" label="What proof do you have that it can work?" [multiline]="true"
+              hint="A prototype, a test, a pilot, a letter of support, or similar work you have done."
+              [control]="form.controls.feasibility.controls.validationEvidence" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="assumptions" label="What are you assuming will be true?" [multiline]="true"
+              hint="Example: customers will pay on delivery; electricity will be available."
+              [control]="form.controls.feasibility.controls.assumptions" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+            <app-idea-field id="risks" label="What could go wrong, and what will you do about it?" [multiline]="true"
+              hint="Every idea has risks. Naming them shows you have thought it through."
+              [control]="form.controls.feasibility.controls.risks" [maxLength]="limits.long"
+              [voice]="true" [language]="language()" />
+          }
+
+          @case ('financing') {
+            <div class="field-row">
+              <label for="currency">Currency</label>
+              <select id="currency" [formControl]="form.controls.financing.controls.currency">
+                @for (c of currencies; track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+            </div>
+
+            <fieldset class="costs">
+              <legend>Cost items</legend>
+              @for (cost of costs.controls; track cost; let i = $index) {
+                <div class="row">
+                  <app-idea-field [id]="'cost-' + i + '-item'" label="What will you spend on?"
+                    hint="Example: Solar inverter, Delivery van deposit."
+                    [control]="cost.controls.item" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+                  <app-idea-field [id]="'cost-' + i + '-amount'" label="Amount" type="number"
+                    [control]="cost.controls.amount" />
+                  <app-idea-field [id]="'cost-' + i + '-desc'" label="Details (optional)"
+                    hint="Model number, supplier name or how you calculated it."
+                    [control]="cost.controls.description" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+                  <button type="button" class="secondary remove-btn" [disabled]="costs.length === 1" (click)="removeCost(i)">
+                    <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    <span>Remove item {{ i + 1 }}</span>
+                  </button>
+                </div>
+              }
+              <button type="button" class="secondary add-btn" (click)="addCost()">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Add another cost item</span>
+              </button>
+            </fieldset>
+
+            <p class="total" aria-live="polite">
+              Total funding needed:
+              <strong>{{ form.controls.financing.controls.currency.value }} {{ totalFunding() | number: '1.2-2' }}</strong>
+            </p>
+
+            <app-idea-field id="funding-sources" label="Where will the money come from?" [multiline]="true" [rows]="3"
+              hint="Your own savings, a grant, a loan, customers paying in advance, or CEDA support."
+              [control]="form.controls.financing.controls.fundingSources" [maxLength]="limits.short"
+              [voice]="true" [language]="language()" />
+          }
+
+          @case ('milestones') {
+            @for (milestone of milestones.controls; track milestone; let i = $index) {
+              <fieldset class="row">
+                <legend>Milestone {{ i + 1 }}</legend>
+                <app-idea-field [id]="'ms-' + i + '-title'" label="What will you finish?"
+                  [control]="milestone.controls.title" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+                <app-idea-field [id]="'ms-' + i + '-date'" label="Target date" type="date"
+                  [control]="milestone.controls.targetDate" />
+                <app-idea-field [id]="'ms-' + i + '-measure'" label="How will you know it is done?"
+                  hint="A number or a clear result. Example: 5 cold rooms installed."
+                  [control]="milestone.controls.successMeasure" [maxLength]="limits.short" [voice]="true" [language]="language()" />
+                <app-idea-field [id]="'ms-' + i + '-cost'" label="Estimated cost (optional)" type="number"
+                  [control]="milestone.controls.estimatedCost" />
+                <button type="button" class="secondary remove-btn" [disabled]="milestones.length === 1" (click)="removeMilestone(i)">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                  <span>Remove milestone {{ i + 1 }}</span>
+                </button>
+              </fieldset>
+            }
+            <button type="button" class="secondary add-btn" (click)="addMilestone()">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Add another milestone</span>
+            </button>
+          }
+
+          @case ('consent') {
+            <ul class="review">
+              @for (s of steps; track s.key; let i = $index) {
+                @if (i < steps.length - 1) {
+                  <li>
+                    <span class="review-status">
+                      @if (stepComplete()[i]) {
+                        <svg class="icon icon-sm icon-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      } @else {
+                        <svg class="icon icon-sm icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                      }
+                      <span>{{ s.label }}: <strong>{{ stepComplete()[i] ? 'Complete' : 'Needs attention' }}</strong></span>
+                    </span>
+                    <button type="button" class="secondary" (click)="goTo(i)">
+                      <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      <span>Edit {{ s.label }}</span>
+                    </button>
+                  </li>
+                }
+              }
+            </ul>
+            <p class="total">
+              Total funding needed:
+              <strong>{{ form.controls.financing.controls.currency.value }} {{ totalFunding() | number: '1.2-2' }}</strong>
+            </p>
+
+            <div class="consent">
+              <input type="checkbox" id="ai-consent"
+                [formControl]="form.controls.consent.controls.aiAnalysis" aria-describedby="ai-consent-help" />
+              <label for="ai-consent" id="ai-consent-help">
+                I agree that the text of my idea is sent to Google Gemini for advisory screening
+                and validation. My name, email and ID are not sent. The screening provides immediate guidance
+                to improve my submission before it is forwarded to human evaluators.
+              </label>
+            </div>
+            @if (form.controls.consent.controls.aiAnalysis.touched && form.controls.consent.controls.aiAnalysis.invalid) {
+              <p class="error anim-fade-in">Please tick the box to proceed with screening and submission.</p>
+            }
+          }
+        }
+      </div>
+
+      @if (submissionError(); as error) {
+        <p class="error anim-fade-in" role="alert">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+          </svg>
+          <span>{{ error }}</span>
+        </p>
+      }
+
+      @if (screeningLoading()) {
+        <div class="anim-fade-in">
+          <app-idea-loader label="AI Screening in progress: checking uniqueness, feasibility, and clarity..." />
+        </div>
+      }
+
+      @if (submitting()) {
+        <div class="anim-fade-in">
+          <app-idea-loader
+            [label]="selectedAttachments().length > 0
+              ? 'Uploading your files and submitting your idea'
+              : (isResubmission() ? 'Resubmitting your idea' : 'Submitting your idea')" />
+        </div>
+      }
+      @if (removingAttachment()) {
+        <app-idea-loader label="Removing the selected file" />
+      }
+
+      <div class="actions">
+        <div class="actions-left">
+          <button type="button" class="secondary" [disabled]="step() === 0 || submitting() || screeningLoading()" (click)="back()">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+            <span>Back</span>
+          </button>
+
+          <button
+            type="button"
+            class="secondary draft-btn"
+            [disabled]="submitting() || screeningLoading()"
+            (click)="saveDraft()"
+          >
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            <span>Save draft</span>
+          </button>
+        </div>
+
+        <div class="actions-right">
+          @if (isLastStep()) {
+            <button type="submit" class="primary" [disabled]="submitting() || screeningLoading()">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+              <span>{{ isResubmission() ? 'Screen & Resubmit' : 'Screen & Submit' }}</span>
+            </button>
+          } @else {
+            <button type="button" class="primary" [disabled]="submitting() || screeningLoading()" (click)="next()">
+              <span>Next</span>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </button>
+          }
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- ================= DRAFT VIEWER MODAL ================= -->
+  @if (draftViewerOpen()) {
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="draft-modal-title">
+      <div class="modal-card anim-slide-down">
+        <header class="modal-header">
+          <div>
+            <h2 id="draft-modal-title">Saved Idea Draft</h2>
+            <p class="modal-subtitle">
+              @if (savedDraftMetadata(); as meta) {
+                Last saved on {{ meta.savedAt | date: 'medium' }} on this device.
+              } @else {
+                No draft saved in local storage yet.
+              }
+            </p>
+          </div>
+          <button type="button" class="icon-close-btn" (click)="closeDraftViewer()" aria-label="Close draft viewer">
+            ✕
+          </button>
+        </header>
+
+        <div class="modal-body">
+          @if (savedDraftMetadata(); as meta) {
+            <div class="draft-summary-box">
+              <h3>Draft Contents</h3>
+              <dl class="draft-dl">
+                <dt>Idea Title:</dt>
+                <dd>{{ meta.title || '(Untitled idea)' }}</dd>
+                <dt>Problem & Solution:</dt>
+                <dd>{{ meta.problem ? 'Filled' : 'Empty' }} · {{ meta.solution ? 'Filled' : 'Empty' }}</dd>
+                <dt>Target Beneficiaries:</dt>
+                <dd>{{ meta.beneficiaries || 'Not specified' }}</dd>
+                <dt>Location:</dt>
+                <dd>{{ meta.location || 'Not specified' }}</dd>
+                <dt>Cost Items:</dt>
+                <dd>{{ meta.costItemCount }} items (Total: {{ meta.currency }} {{ meta.totalFunding | number: '1.2-2' }})</dd>
+                <dt>Milestones:</dt>
+                <dd>{{ meta.milestoneCount }} milestones recorded</dd>
+                <dt>Attached Files:</dt>
+                <dd>{{ meta.attachmentCount }} attachments selected</dd>
+              </dl>
+            </div>
+          } @else {
+            <p class="empty-hint">There is currently no saved draft in your browser's local storage. Click "Save draft" at any point to keep your work safe.</p>
+          }
+
+          <div class="file-operations">
+            <h3>Export or Import JSON File</h3>
+            <p class="hint-text">You can save your draft as a local JSON file adhering to the Firestore schema, or restore a previously saved JSON file.</p>
+            <div class="file-buttons">
+              <button type="button" class="secondary" (click)="exportDraftJson()">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>Download draft (JSON)</span>
+              </button>
+
+              <label class="secondary file-upload-label">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <span>Import JSON file</span>
+                <input type="file" accept=".json,application/json" class="sr-only" (change)="importDraftJson($event)" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button type="button" class="secondary" (click)="closeDraftViewer()">Close</button>
+          @if (savedDraftMetadata()) {
+            <button type="button" class="primary" (click)="restoreCurrentDraftFromStorage()">
+              <span>Load this draft into form</span>
+            </button>
+          }
+        </footer>
+      </div>
     </div>
   }
 
-  <div class="meter">
-    <p id="meter-label">Form completeness: <strong>{{ completeness() }}%</strong></p>
-    <div
-      class="track"
-      role="progressbar"
-      aria-labelledby="meter-label"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      [attr.aria-valuenow]="completeness()"
-    >
-      <div class="bar" [style.width.%]="completeness()"></div>
-    </div>
-  </div>
-
-  <nav aria-label="Idea form steps">
-    <ol class="steps">
-      @for (s of steps; track s.key; let i = $index) {
-        <li>
-          <button
-            type="button"
-            [attr.aria-current]="i === step() ? 'step' : null"
-            [disabled]="i > furthest()"
-            [class.done]="stepComplete()[i]"
-            (click)="goTo(i)"
-          >
-            <span class="num" aria-hidden="true">{{ stepComplete()[i] && i !== step() ? '✓' : i + 1 }}</span>
-            {{ s.label }}
-            <span class="sr-only">{{ stepComplete()[i] ? '(complete)' : '(not complete)' }}</span>
-          </button>
-        </li>
-      }
-    </ol>
-  </nav>
-
-  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    <h2 #stepHeading tabindex="-1">
-      Step {{ step() + 1 }} of {{ steps.length }}: {{ currentStep().label }}
-    </h2>
-    <p class="intro">{{ currentStep().intro }}</p>
-
-    @switch (currentStep().key) {
-      @case ('basics') {
-        <app-idea-field id="title" label="Name of your idea"
-          hint="A short name people will remember. Example: Solar cold rooms for farmers in the Okavango."
-          [control]="form.controls.basics.controls.title" [maxLength]="limits.title"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="problem" label="What problem are you solving?" [multiline]="true"
-          hint="Who is struggling, with what, and how often? Example: Vegetables rot within two days because there is no cold storage."
-          [control]="form.controls.basics.controls.problem" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="solution" label="What is your solution?" [multiline]="true"
-          hint="Explain it as if you were telling a friend. What will people see, use or buy?"
-          [control]="form.controls.basics.controls.proposedSolution" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="beneficiaries" label="Who will benefit?" [multiline]="true" [rows]="3"
-          hint="Example: 200 small-scale farmers and 15 local shops."
-          [control]="form.controls.basics.controls.intendedBeneficiaries" [maxLength]="limits.short"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="location" label="Where will you do this?"
-          hint="Town, village or district. Example: Francistown, North-East District."
-          [control]="form.controls.basics.controls.plannedLocation" [maxLength]="limits.short"
-          [voice]="true" [language]="language()" />
-
-        <section class="attachments" aria-labelledby="attachments-heading">
-          <h3 id="attachments-heading">Have something that helps tell your story?</h3>
-          <p class="attachment-intro">
-            Add a sketch, photo, quote, or supporting document. It is optional, and you can keep going without one.
-          </p>
-          <div
-            class="attachment-dropzone"
-            [class.is-dragging]="isDraggingFiles()"
-            (dragover)="onAttachmentDragOver($event)"
-            (dragleave)="onAttachmentDragLeave($event)"
-            (drop)="onAttachmentDrop($event)"
-          >
-            <input
-              id="idea-attachments"
-              class="attachment-input"
-              type="file"
-              multiple
-              [attr.accept]="attachmentAccept"
-              [attr.aria-describedby]="'attachment-help attachment-error'"
-              [attr.aria-invalid]="attachmentError() ? 'true' : null"
-              [disabled]="submitting() || removingAttachment()"
-              (change)="onAttachmentSelection($event)"
-            />
-            <label class="attachment-prompt" for="idea-attachments">
-              <span class="upload-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false">
-                  <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
-                </svg>
-              </span>
-              <span class="drop-title">Drop your files here</span>
-              <span class="drop-browse">or <span>choose files</span></span>
-            </label>
+  <!-- ================= AI SCREENING FEEDBACK MODAL ================= -->
+  @if (screeningModalOpen() && screeningResult(); as result) {
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="screening-modal-title">
+      <div class="modal-card screening-card anim-slide-down">
+        <header class="modal-header">
+          <div class="header-icon-wrap">
+            <svg class="icon icon-lg icon-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+            <div>
+              <h2 id="screening-modal-title">AI Screening Findings & Feedback</h2>
+              <p class="modal-subtitle">First-line automated evaluation powered by Google Gemini</p>
+            </div>
           </div>
-          <p id="attachment-help" class="attachment-help">
-            PDF, images, Word, Excel, PowerPoint, CSV, or text · up to {{ attachmentLimits.count }} files ·
-            {{ attachmentLimits.sizeMb }} MB each. We will upload them when you send your idea. Files are not saved
-            with your draft, so please select them again if you return later.
-          </p>
-          <p id="attachment-error" class="error" aria-live="polite">
-            @if (attachmentError(); as error) { {{ error }} }
-          </p>
+          <button type="button" class="icon-close-btn" (click)="closeScreeningModal()" aria-label="Close screening findings">
+            ✕
+          </button>
+        </header>
 
-          @if (existingAttachments().length > 0) {
-            <div class="attachment-existing">
-              <h4>Already attached to this idea</h4>
-              <ul>
-                @for (attachment of existingAttachments(); track attachment.id) {
-                  <li>{{ attachment.name }} <span>({{ attachment.contentType }})</span></li>
+        <div class="modal-body">
+          <!-- Draft save hint -->
+          <div class="banner draft-hint-banner" role="status">
+            <div class="banner-text">
+              <svg class="icon icon-md icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <div>
+                <strong>Hint: Save your draft now!</strong>
+                <p>Save your draft to make sure none of your information is lost while you review this feedback.</p>
+              </div>
+            </div>
+            <button type="button" class="secondary" (click)="saveDraft()">Save draft now</button>
+          </div>
+
+          <!-- Overall Summary -->
+          <div class="screening-section">
+            <h3>Executive Summary</h3>
+            <p class="summary-text">{{ result.summary }}</p>
+          </div>
+
+          <!-- Assessment Badges Grid -->
+          <div class="screening-badges-grid">
+            <div class="badge-card" [class.badge-pass]="result.uniquenessRating === 'high' || result.uniquenessRating === 'moderate'" [class.badge-warn]="result.uniquenessRating === 'low'">
+              <span class="badge-label">Uniqueness</span>
+              <strong>{{ result.uniquenessRating | titlecase }}</strong>
+              <p>{{ result.uniquenessComment }}</p>
+            </div>
+
+            <div class="badge-card" [class.badge-pass]="result.feasibilityRating === 'high' || result.feasibilityRating === 'moderate'" [class.badge-warn]="result.feasibilityRating === 'low'">
+              <span class="badge-label">Feasibility</span>
+              <strong>{{ result.feasibilityRating | titlecase }}</strong>
+              <p>{{ result.feasibilityComment }}</p>
+            </div>
+
+            <div class="badge-card" [class.badge-pass]="result.readinessRating === 'ready'" [class.badge-warn]="result.readinessRating !== 'ready'">
+              <span class="badge-label">Screening Verdict</span>
+              <strong>{{ result.readinessRating === 'ready' ? 'Passed First Line' : 'Touchups Recommended' }}</strong>
+              <p>{{ result.readinessComment }}</p>
+            </div>
+          </div>
+
+          <!-- Strengths -->
+          @if (result.strengths.length > 0) {
+            <div class="screening-section">
+              <h4>Key Strengths</h4>
+              <ul class="findings-list strengths-list">
+                @for (strength of result.strengths; track strength) {
+                  <li>
+                    <svg class="icon icon-sm icon-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>{{ strength }}</span>
+                  </li>
                 }
               </ul>
             </div>
           }
 
-          @if (selectedAttachments().length > 0) {
-            <ul class="attachment-list" aria-label="Files selected for your idea" aria-live="polite">
-              @for (selected of selectedAttachments(); track selected.file.name + selected.file.lastModified; let i = $index) {
-                <li class="attachment-item">
-                  <span class="attachment-type" aria-hidden="true">{{ attachmentCategory(selected.file) }}</span>
-                  <span class="attachment-details">
-                    <strong>{{ selected.file.name }}</strong>
-                    <span>{{ attachmentCategory(selected.file) }} · {{ attachmentSize(selected.file) }}</span>
-                  </span>
-                  <button
-                    type="button"
-                    class="remove-attachment"
-                    [disabled]="submitting() || removingAttachment()"
-                    [attr.aria-label]="'Remove ' + selected.file.name"
-                    (click)="removeSelectedAttachment(i)"
-                  >
-                    Remove
-                  </button>
-                </li>
-              }
-            </ul>
+          <!-- Recommendations / Touchups -->
+          @if (result.recommendations.length > 0) {
+            <div class="screening-section">
+              <h4>Recommended Improvements Before Evaluators Review</h4>
+              <ul class="findings-list recommendations-list">
+                @for (rec of result.recommendations; track rec) {
+                  <li>
+                    <svg class="icon icon-sm icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{{ rec }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
           }
-        </section>
-      }
-
-      @case ('market') {
-        <app-idea-field id="target-market" label="Who are your customers or users?" [multiline]="true"
-          hint="Describe them: who they are, how many, where they are."
-          [control]="form.controls.market.controls.targetMarket" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="alternatives" label="What do people use today instead?" [multiline]="true"
-          hint="Other products, shops or habits. If you think there is nothing, say what people do now."
-          [control]="form.controls.market.controls.alternatives" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="differentiation" label="Why will people choose yours?" [multiline]="true"
-          hint="Cheaper, faster, closer, easier, better quality? Be specific."
-          [control]="form.controls.market.controls.differentiation" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="validation" label="How do you know people want this?" [multiline]="true"
-          hint="Who have you asked? What did they say? A survey, a trial or a first sale all count."
-          [control]="form.controls.market.controls.marketValidation" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-      }
-
-      @case ('feasibility') {
-        <app-idea-field id="technical" label="How will you build or deliver it?" [multiline]="true"
-          hint="Tools, equipment, skills and suppliers you will use."
-          [control]="form.controls.feasibility.controls.technicalApproach" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="operations" label="How will it run day to day?" [multiline]="true"
-          hint="Who does what, where, and how often?"
-          [control]="form.controls.feasibility.controls.operationalPlan" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="evidence" label="What proof do you have that it can work?" [multiline]="true"
-          hint="A prototype, a test, a pilot, a letter of support, or similar work you have done."
-          [control]="form.controls.feasibility.controls.validationEvidence" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="assumptions" label="What are you assuming will be true?" [multiline]="true"
-          hint="Example: customers will pay on delivery; electricity will be available."
-          [control]="form.controls.feasibility.controls.assumptions" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-        <app-idea-field id="risks" label="What could go wrong, and what will you do about it?" [multiline]="true"
-          hint="Every idea has risks. Naming them shows you have thought it through."
-          [control]="form.controls.feasibility.controls.risks" [maxLength]="limits.long"
-          [voice]="true" [language]="language()" />
-      }
-
-      @case ('financing') {
-        <div class="field-row">
-          <label for="currency">Currency</label>
-          <select id="currency" [formControl]="form.controls.financing.controls.currency">
-            @for (c of currencies; track c) {
-              <option [value]="c">{{ c }}</option>
-            }
-          </select>
         </div>
 
-        @for (cost of costs.controls; track cost; let i = $index) {
-          <fieldset class="row">
-            <legend>Cost item {{ i + 1 }}</legend>
-            <app-idea-field [id]="'cost-' + i + '-item'" label="What is the cost for?"
-              [control]="cost.controls.item" [maxLength]="limits.short" [voice]="true" [language]="language()" />
-            <app-idea-field [id]="'cost-' + i + '-amount'" label="Amount" type="number"
-              [control]="cost.controls.amount" />
-            <app-idea-field [id]="'cost-' + i + '-desc'" label="Notes (optional)"
-              [control]="cost.controls.description" [maxLength]="limits.short" />
-            <button type="button" class="secondary" [disabled]="costs.length === 1" (click)="removeCost(i)">
-              Remove cost item {{ i + 1 }}
+        <footer class="modal-footer screening-footer">
+          <div class="footer-note">
+            <span>You can accept these recommendations to refine your idea, or proceed directly to submit.</span>
+          </div>
+          <div class="footer-buttons">
+            <button type="button" class="secondary" (click)="acceptAiRecommendations()">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              <span>Accept recommendations & refine</span>
             </button>
-          </fieldset>
-        }
-        <button type="button" class="secondary" (click)="addCost()">Add another cost item</button>
 
-        <p class="total" aria-live="polite">
-          Total funding needed:
-          <strong>{{ form.controls.financing.controls.currency.value }} {{ totalFunding() | number: '1.2-2' }}</strong>
-        </p>
-
-        <app-idea-field id="funding-sources" label="Where will the money come from?" [multiline]="true" [rows]="3"
-          hint="Your own savings, a grant, a loan, customers paying in advance, or CEDA support."
-          [control]="form.controls.financing.controls.fundingSources" [maxLength]="limits.short"
-          [voice]="true" [language]="language()" />
-      }
-
-      @case ('milestones') {
-        @for (milestone of milestones.controls; track milestone; let i = $index) {
-          <fieldset class="row">
-            <legend>Milestone {{ i + 1 }}</legend>
-            <app-idea-field [id]="'ms-' + i + '-title'" label="What will you finish?"
-              [control]="milestone.controls.title" [maxLength]="limits.short" [voice]="true" [language]="language()" />
-            <app-idea-field [id]="'ms-' + i + '-date'" label="Target date" type="date"
-              [control]="milestone.controls.targetDate" />
-            <app-idea-field [id]="'ms-' + i + '-measure'" label="How will you know it is done?"
-              hint="A number or a clear result. Example: 5 cold rooms installed."
-              [control]="milestone.controls.successMeasure" [maxLength]="limits.short" [voice]="true" [language]="language()" />
-            <app-idea-field [id]="'ms-' + i + '-cost'" label="Estimated cost (optional)" type="number"
-              [control]="milestone.controls.estimatedCost" />
-            <button type="button" class="secondary" [disabled]="milestones.length === 1" (click)="removeMilestone(i)">
-              Remove milestone {{ i + 1 }}
+            <button type="button" class="primary" [disabled]="submitting()" (click)="proceedWithFinalSubmission()">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+              <span>Submit final draft to evaluators</span>
             </button>
-          </fieldset>
-        }
-        <button type="button" class="secondary" (click)="addMilestone()">Add another milestone</button>
-      }
-
-      @case ('consent') {
-        <ul class="review">
-          @for (s of steps; track s.key; let i = $index) {
-            @if (i < steps.length - 1) {
-              <li>
-                <span>{{ s.label }}: <strong>{{ stepComplete()[i] ? 'Complete' : 'Needs attention' }}</strong></span>
-                <button type="button" class="secondary" (click)="goTo(i)">Edit {{ s.label }}</button>
-              </li>
-            }
-          }
-        </ul>
-        <p class="total">
-          Total funding needed:
-          <strong>{{ form.controls.financing.controls.currency.value }} {{ totalFunding() | number: '1.2-2' }}</strong>
-        </p>
-
-        <div class="consent">
-          <input type="checkbox" id="ai-consent"
-            [formControl]="form.controls.consent.controls.aiAnalysis" aria-describedby="ai-consent-help" />
-          <label for="ai-consent" id="ai-consent-help">
-            I agree that the text of my idea is sent to Google Gemini through a CEDA Cloud Function
-            for an advisory check. My name, email and ID are not sent. The check helps evaluators;
-            people make every decision.
-          </label>
-        </div>
-        @if (form.controls.consent.controls.aiAnalysis.touched && form.controls.consent.controls.aiAnalysis.invalid) {
-          <p class="error">Please tick the box to send your idea.</p>
-        }
-      }
-    }
-
-    @if (submissionError(); as error) {
-      <p class="error" role="alert">{{ error }}</p>
-    }
-
-    @if (submitting()) {
-      <app-idea-loader
-        [label]="selectedAttachments().length > 0
-          ? 'Uploading your files and submitting your idea'
-          : (isResubmission() ? 'Resubmitting your idea' : 'Submitting your idea')" />
-    }
-    @if (removingAttachment()) {
-      <app-idea-loader label="Removing the selected file" />
-    }
-
-    <div class="actions">
-      <button type="button" class="secondary" [disabled]="step() === 0 || submitting()" (click)="back()">Back</button>
-      @if (isLastStep()) {
-        <button type="submit" class="primary" [disabled]="submitting()">
-          {{ isResubmission() ? 'Update and resubmit' : 'Send my idea' }}
-        </button>
-      } @else {
-        <button type="button" class="primary" [disabled]="submitting()" (click)="next()">Next</button>
-      }
+          </div>
+        </footer>
+      </div>
     </div>
-  </form>
-</section>
+  }
 }

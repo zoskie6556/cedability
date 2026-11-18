@@ -93,6 +93,8 @@ export class ProfileComponent implements OnInit {
     addressLocation: [''],
   });
 
+  private userID: any | undefined;
+
   ngOnInit(): void {
     this.activatedRoute.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -102,7 +104,6 @@ export class ProfileComponent implements OnInit {
       });
     void this.loadProfile();
   }
-
   protected async loadProfile(): Promise<void> {
     this.isLoading.set(true);
     this.loadError.set(null);
@@ -117,11 +118,13 @@ export class ProfileComponent implements OnInit {
 
       this.hasSignedInUser.set(true);
       const user = await this.userDataService.getOrCreateUser(authUser);
+      
       this.user.set(user);
       this.populateForm(user.profile);
 
       if (user.profile.onboardingCompleted) {
         await this.loadIdeas(user.uid);
+        this.userID = user.uid;
       }
     } catch {
       this.loadError.set('We could not load your profile. Check your connection and try again.');
@@ -454,22 +457,61 @@ export class ProfileComponent implements OnInit {
     }
   }
 
+  // private async loadIdeas(uid: string): Promise<void> {
+  //   this.userID = uid;
+  //   console.log("Im clicked and the user is", this.userID);
+    
+  //   try {
+  //     const ideas = await this.userDataService.getIdeasForUser(uid);
+  //     this.ideas.set(ideas);
+  //     const loadedQuestions: Record<string, IdeaQuestion[] | undefined> = {};
+  //     await Promise.all(
+  //       ideas.map(async (idea) => {
+  //         loadedQuestions[idea.id] = await this.userDataService.getQuestionsForIdea(idea.id);
+  //       }),
+  //     );
+  //     this.ideaQuestions.set(loadedQuestions);
+  //   } catch {
+  //     this.ideasError.set('Your profile loaded, but we could not load your ideas.');
+  //   }
+  // }
+protected retryLoadIdeas(): void {
+    const uid = this.user()?.uid ?? this.userID;
+    console.log('[ProfileComponent] Retry clicked. Resolved UID:', uid);
+    if (!uid) {
+      this.ideasError.set('Unable to determine your user ID. Please refresh the page.');
+      return;
+    }
+    void this.loadIdeas(uid);
+  }
+
   private async loadIdeas(uid: string): Promise<void> {
+    this.userID = uid;
+    this.ideasError.set(null);
+    console.log('[ProfileComponent] Starting loadIdeas for UID:', uid);
+
     try {
       const ideas = await this.userDataService.getIdeasForUser(uid);
+      console.log('[ProfileComponent] Parsed ideas JSON:', JSON.stringify(ideas, null, 2));
       this.ideas.set(ideas);
+
       const loadedQuestions: Record<string, IdeaQuestion[] | undefined> = {};
       await Promise.all(
         ideas.map(async (idea) => {
-          loadedQuestions[idea.id] = await this.userDataService.getQuestionsForIdea(idea.id);
+          try {
+            loadedQuestions[idea.id] = await this.userDataService.getQuestionsForIdea(idea.id);
+          } catch (questionError) {
+            console.error(`[ProfileComponent] Failed to load questions for idea ${idea.id}:`, questionError);
+            loadedQuestions[idea.id] = [];
+          }
         }),
       );
       this.ideaQuestions.set(loadedQuestions);
-    } catch {
+    } catch (error) {
+      console.error('[ProfileComponent] loadIdeas failed:', error);
       this.ideasError.set('Your profile loaded, but we could not load your ideas.');
     }
   }
-
   private populateForm(profile: Profile): void {
     this.form.patchValue({
       userType: profile.userType,

@@ -21,6 +21,8 @@ const HEALTH_LABELS: Readonly<Record<HealthColour, string>> = {
   red: 'Closed',
 };
 
+const MAX_REPLY_LENGTH = 2000;
+
 @Component({
   selector: 'app-status',
   imports: [DatePipe, IdeaLoaderComponent, RouterLink],
@@ -32,10 +34,16 @@ export class StatusComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly toastService = inject(ToastService);
   private readonly userDataService = inject(UserDataService);
+
   private stopWatchingIdeas: (() => void) | null = null;
+  private isDestroyed = false;
+  private loadSequence = 0;
+  private feedbackLoadSequence = 0;
 
   protected readonly stages = STAGES;
   protected readonly healthLabels = HEALTH_LABELS;
+  protected readonly maxReplyLength = MAX_REPLY_LENGTH;
+
   protected readonly ideas = signal<Idea[]>([]);
   protected readonly feedbackByIdea = signal<Record<string, IdeaFeedback[] | undefined>>({});
   protected readonly feedbackLoading = signal<Record<string, boolean | undefined>>({});
@@ -46,27 +54,32 @@ export class StatusComponent implements OnInit, OnDestroy {
   protected readonly isLoading = signal(true);
   protected readonly hasSignedInUser = signal(false);
   protected readonly loadError = signal<string | null>(null);
-  private feedbackLoadSequence = 0;
 
   ngOnInit(): void {
     void this.loadSubmissions();
   }
 
   ngOnDestroy(): void {
-    this.stopWatchingIdeas?.();
+    this.isDestroyed = true;
+    this.cleanupIdeaListener();
   }
 
   protected async loadSubmissions(): Promise<void> {
-    this.stopWatchingIdeas?.();
-    this.stopWatchingIdeas = null;
+    const sequence = ++this.loadSequence;
+    this.cleanupIdeaListener();
     this.isLoading.set(true);
     this.loadError.set(null);
 
     try {
       const authUser = await this.authService.getCurrentUser();
+      if (this.isDestroyed || sequence !== this.loadSequence) return;
+
       if (!authUser) {
         this.hasSignedInUser.set(false);
         this.ideas.set([]);
+        this.feedbackByIdea.set({});
+        this.feedbackLoading.set({});
+        this.feedbackErrors.set({});
         this.isLoading.set(false);
         return;
       }
@@ -75,15 +88,71 @@ export class StatusComponent implements OnInit, OnDestroy {
       this.stopWatchingIdeas = this.userDataService.watchIdeasForUser(
         authUser.uid,
         (ideas) => {
+          if (this.isDestroyed || sequence !== this.loadSequence) return;
+          this.loadError.set(null);
           this.ideas.set(ideas);
           void this.loadFeedback(ideas);
           this.isLoading.set(false);
         },
-        (error: unknown) => this.handleLoadError(error),
+        (error: unknown) => {
+          if (this.isDestroyed || sequence !== this.loadSequence) return;
+          this.handleLoadError(error);
+        },
       );
     } catch (error: unknown) {
+      if (this.isDestroyed || sequence !== this.loadSequence) return;
       this.handleLoadError(error);
     }
+  }
+
+  protected onReplyInput(ideaId: string, feedbackId: string, event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    const key = this.replyKey(ideaId, feedbackId);
+    this.replyDrafts.update((drafts) => ({ ...drafts, [key]: target.value }));
+    if (this.replyErrors()[key]) {
+      this.replyErrors.update((errors) => ({ ...errors, [key]: '' }));
+    }
+  }
+
+  protected async sendReply(ideaId: string, feedbackId: string): Promise<void> {
+    const key = this.replyKey(ideaId, feedbackId);
+    const message = (this.replyDrafts()[key] ?? '').trim();
+    if (!message || message.length > MAX_REPLY_LENGTH || this.replyingTo()) return;
+
+    this.replyingTo.set(key);
+    this.replyErrors.update((errors) => ({ ...errors, [key]: '' }));
+
+    try {
+      await this.userDataService.replyToFeedback(ideaId, feedbackId, message);
+      if (this.isDestroyed) return;
+
+      const feedback = await this.userDataService.getFeedbackForIdea(ideaId);
+      if (this.isDestroyed) return;
+
+      this.feedbackByIdea.update((current) => ({ ...current, [ideaId]: feedback }));
+      this.replyDrafts.update((drafts) => ({ ...drafts, [key]: '' }));
+      this.toastService.success('Your reply was sent.');
+    } catch (error: unknown) {
+      if (this.isDestroyed) return;
+      console.error('[StatusComponent] could not send feedback reply', error);
+      const errorMessage = 'We could not send your reply. Check your connection and try again.';
+      this.replyErrors.update((errors) => ({ ...errors, [key]: errorMessage }));
+      this.toastService.error(errorMessage);
+    } finally {
+      if (!this.isDestroyed) {
+        this.replyingTo.set(null);
+      }
+    }
+  }
+
+  protected replyKey(ideaId: string, feedbackId: string): string {
+    return `${ideaId}:${feedbackId}`;
+  }
+
+  private cleanupIdeaListener(): void {
+    this.stopWatchingIdeas?.();
+    this.stopWatchingIdeas = null;
   }
 
   private handleLoadError(error: unknown): void {
@@ -94,38 +163,16 @@ export class StatusComponent implements OnInit, OnDestroy {
     this.toastService.error(message);
   }
 
-  protected onReplyInput(ideaId: string, feedbackId: string, event: Event): void {
-    const target = event.target;
-    if (!(target instanceof HTMLTextAreaElement)) return;
-    const key = this.replyKey(ideaId, feedbackId);
-    this.replyDrafts.update((drafts) => ({ ...drafts, [key]: target.value }));
-  }
-
-  protected async sendReply(ideaId: string, feedbackId: string): Promise<void> {
-    const key = this.replyKey(ideaId, feedbackId);
-    const message = (this.replyDrafts()[key] ?? '').trim();
-    if (!message || message.length > 2000 || this.replyingTo()) return;
-
-    this.replyingTo.set(key);
-    this.replyErrors.update((errors) => ({ ...errors, [key]: '' }));
-    try {
-      await this.userDataService.replyToFeedback(ideaId, feedbackId, message);
-      const feedback = await this.userDataService.getFeedbackForIdea(ideaId);
-      this.feedbackByIdea.update((current) => ({ ...current, [ideaId]: feedback }));
-      this.replyDrafts.update((drafts) => ({ ...drafts, [key]: '' }));
-      this.toastService.success('Your reply was sent.');
-    } catch (error: unknown) {
-      console.error('[StatusComponent] could not send feedback reply', error);
-      const message = 'We could not send your reply. Check your connection and try again.';
-      this.replyErrors.update((errors) => ({ ...errors, [key]: message }));
-      this.toastService.error(message);
-    } finally {
-      this.replyingTo.set(null);
-    }
-  }
-
   private async loadFeedback(ideas: Idea[]): Promise<void> {
     const sequence = ++this.feedbackLoadSequence;
+
+    if (ideas.length === 0) {
+      this.feedbackByIdea.set({});
+      this.feedbackLoading.set({});
+      this.feedbackErrors.set({});
+      return;
+    }
+
     this.feedbackLoading.set(
       Object.fromEntries(ideas.map((idea) => [idea.id, true])),
     );
@@ -137,10 +184,13 @@ export class StatusComponent implements OnInit, OnDestroy {
           return {
             ideaId: idea.id,
             feedback: await this.userDataService.getFeedbackForIdea(idea.id),
-            error: null,
+            error: null as string | null,
           };
         } catch (error: unknown) {
-          console.error('[StatusComponent] could not load idea feedback', { ideaId: idea.id, error });
+          console.error('[StatusComponent] could not load idea feedback', {
+            ideaId: idea.id,
+            error,
+          });
           return {
             ideaId: idea.id,
             feedback: [] as IdeaFeedback[],
@@ -150,11 +200,13 @@ export class StatusComponent implements OnInit, OnDestroy {
       }),
     );
 
-    if (sequence !== this.feedbackLoadSequence) return;
+    if (this.isDestroyed || sequence !== this.feedbackLoadSequence) return;
+
     this.feedbackByIdea.set(
       Object.fromEntries(results.map(({ ideaId, feedback }) => [ideaId, feedback])),
     );
     this.feedbackLoading.set(Object.fromEntries(ideas.map((idea) => [idea.id, false])));
+
     const feedbackErrors: Record<string, string | undefined> = {};
     for (const result of results) {
       if (result.error !== null) {
@@ -162,12 +214,9 @@ export class StatusComponent implements OnInit, OnDestroy {
       }
     }
     this.feedbackErrors.set(feedbackErrors);
+
     if (results.some((result) => result.error !== null)) {
       this.toastService.error('Some feedback could not be loaded. Please try again later.');
     }
-  }
-
-  protected replyKey(ideaId: string, feedbackId: string): string {
-    return `${ideaId}:${feedbackId}`;
   }
 }
