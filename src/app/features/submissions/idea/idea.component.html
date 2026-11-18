@@ -190,6 +190,7 @@
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <div class="step-card anim-step-enter">
         <h2 #stepHeading tabindex="-1">
+          <span class="sr-only">Step {{ step() + 1 }} of {{ steps.length }}: </span>
           <span class="step-badge-lg">{{ step() + 1 }}</span>
           <span>{{ currentStep().label }}</span>
         </h2>

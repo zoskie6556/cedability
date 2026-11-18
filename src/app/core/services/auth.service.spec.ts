@@ -117,6 +117,8 @@ describe('AuthService', () => {
       emailVerified: false,
       phoneNumberVerified: false,
       role: 'user',
+      evaluatorType: null,
+      organization: null,
       profile: {
         userType: 'individual',
         profession: '',

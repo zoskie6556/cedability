@@ -1,4 +1,4 @@
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe, TitleCasePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -19,6 +19,11 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { debounceTime, map } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
+import {
+  IdeaAiScreeningService,
+  type IdeaPlanPayload,
+  type IdeaScreeningPreflightResult,
+} from '../../../core/services/idea-ai-screening.service';
 import type { IdeaAttachment } from '../../../shared/models/idea-attachment.model';
 import {
   MAX_IDEA_ATTACHMENT_BYTES,
@@ -30,7 +35,7 @@ import {
   attachmentErrorFor,
   attachmentTypeFor,
 } from '../../../shared/models/idea-attachment-policy';
-import { IdeaDraftService } from './idea-draft.service';
+import { IdeaDraftService, type DraftAttachmentMeta } from './idea-draft.service';
 import { IdeaFieldComponent } from './idea-field/idea-field.component';
 import {
   LONG_MAX,
@@ -67,7 +72,15 @@ interface SelectedAttachment {
  */
 @Component({
   selector: 'app-idea',
-  imports: [ReactiveFormsModule, DecimalPipe, RouterLink, IdeaFieldComponent, IdeaLoaderComponent],
+  imports: [
+    ReactiveFormsModule,
+    DecimalPipe,
+    DatePipe,
+    TitleCasePipe,
+    RouterLink,
+    IdeaFieldComponent,
+    IdeaLoaderComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './idea.component.html',
   styleUrl: './idea.component.scss',
@@ -80,6 +93,7 @@ export class IdeaComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly drafts = inject(IdeaDraftService);
+  private readonly aiScreening = inject(IdeaAiScreeningService);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -113,6 +127,26 @@ export class IdeaComponent {
   protected readonly ideaLoadError = signal<string | null>(null);
   protected readonly submissionError = signal<string | null>(null);
   protected readonly loadedVersion = signal<number | null>(null);
+
+  protected readonly draftViewerOpen = signal(false);
+  protected readonly savedDraftMetadata = signal<{
+    savedAt: number;
+    title: string;
+    problem: boolean;
+    solution: boolean;
+    beneficiaries: string;
+    location: string;
+    currency: string;
+    totalFunding: number;
+    costItemCount: number;
+    milestoneCount: number;
+    attachmentCount: number;
+  } | null>(null);
+
+  protected readonly screeningModalOpen = signal(false);
+  protected readonly screeningLoading = signal(false);
+  protected readonly screeningResult = signal<IdeaScreeningPreflightResult | null>(null);
+  protected readonly aiGuidanceActive = signal(false);
 
   private readonly stepHeading = viewChild<ElementRef<HTMLElement>>('stepHeading');
   private readonly authUser = toSignal(user(this.auth), { initialValue: null });
@@ -373,7 +407,7 @@ export class IdeaComponent {
     for (const file of files) {
       const error = attachmentErrorFor(file);
       if (error) {
-        errors.push(`${file.name}: ${error}`);
+        errors.push(error);
         continue;
       }
       if (this.existingAttachments().length + next.length >= MAX_IDEA_ATTACHMENTS) {
@@ -418,10 +452,10 @@ export class IdeaComponent {
     );
   }
 
-  // ---- submit ---------------------------------------------------------------
+  // ---- submit & AI screening -----------------------------------------------
 
   protected async submit(): Promise<void> {
-    if (this.submitting()) return;
+    if (this.submitting() || this.screeningLoading()) return;
     this.submissionError.set(null);
     // Pressing Enter in a field must never send the idea early.
     if (!this.isLastStep()) {
@@ -447,11 +481,66 @@ export class IdeaComponent {
       return;
     }
 
+    if (this.isResubmission()) {
+      await this.proceedWithFinalSubmission();
+      return;
+    }
+
+    // Trigger AI preflight screening before human evaluators receive the idea
+    this.screeningLoading.set(true);
+    try {
+      const payload = this.buildIdeaPlanPayload();
+      const result = await this.aiScreening.screenIdea(payload);
+      this.screeningResult.set(result);
+      this.screeningModalOpen.set(true);
+      this.toast.info('AI Screening complete. Review your recommendations and hint to save draft.');
+    } catch (error: unknown) {
+      console.error('[IdeaComponent] AI screening encountered an error:', error);
+      // Fallback directly to final submission if screening service fails unexpectedly
+      await this.proceedWithFinalSubmission();
+    } finally {
+      this.screeningLoading.set(false);
+    }
+  }
+
+  protected closeScreeningModal(): void {
+    this.screeningModalOpen.set(false);
+  }
+
+  protected acceptAiRecommendations(): void {
+    this.screeningModalOpen.set(false);
+    this.aiGuidanceActive.set(true);
+
+    const target = this.screeningResult()?.targetStepToTouchup;
+    const targetIndex = target ? STEPS.findIndex((s) => s.key === target) : -1;
+    const nextStep = targetIndex >= 0 ? targetIndex : 0;
+
+    this.step.set(nextStep);
+    this.focusHeading();
+    this.toast.info('Recommendations accepted. Update your answers and remember to save your draft!');
+  }
+
+  protected dismissAiGuidance(): void {
+    this.aiGuidanceActive.set(false);
+  }
+
+  protected async proceedWithFinalSubmission(): Promise<void> {
+    if (this.submitting()) return;
+    const authUser = this.authUser();
+    if (!authUser) {
+      this.toast.error('Please sign in again to send your idea.');
+      return;
+    }
+
+    this.screeningModalOpen.set(false);
     this.submitting.set(true);
+    this.submissionError.set(null);
+
     try {
       const profile = await this.userData.getOrCreateUser(authUser);
       const ownerName = profile.fullName.trim() || 'Applicant';
       const ideaId = this.routeIdeaId();
+
       if (ideaId) {
         const version = this.loadedVersion();
         if (version === null) {
@@ -460,7 +549,7 @@ export class IdeaComponent {
         await this.uploadPendingAttachments(ideaId, authUser.uid, ownerName);
         const attachments = [
           ...this.existingAttachments(),
-          ...this.selectedAttachments().flatMap((item) => item.uploaded ? [item.uploaded] : []),
+          ...this.selectedAttachments().flatMap((item) => (item.uploaded ? [item.uploaded] : [])),
         ];
         const idea = toNewIdea(this.form, authUser.uid, ownerName, attachments);
         await this.userData.resubmitIdea(ideaId, version, idea);
@@ -473,11 +562,16 @@ export class IdeaComponent {
           await this.userData.createIdea(idea);
         }
       }
+
       this.submitted = true;
-      if (!ideaId) this.drafts.clear(authUser.uid);
-      this.toast.success(ideaId ? 'Your updated idea was resubmitted.' : 'Your idea was submitted.');
+      if (!ideaId) {
+        this.drafts.clear(authUser.uid);
+      }
+      this.toast.success(
+        ideaId ? 'Your updated idea was resubmitted.' : 'Your idea was submitted.',
+      );
       await this.router.navigate(['/tracking/status']);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Idea submission failed', error);
       const message =
         error instanceof Error && error.message
@@ -488,6 +582,252 @@ export class IdeaComponent {
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  // ---- draft management -----------------------------------------------------
+
+  protected saveDraft(): void {
+    const uid = this.authUser()?.uid;
+    if (!uid) {
+      this.toast.error('Please sign in to save a draft.');
+      return;
+    }
+
+    const raw = this.form.getRawValue();
+    const draftAttachments: DraftAttachmentMeta[] = [
+      ...this.existingAttachments().map((a) => ({
+        name: a.name,
+        size: a.sizeBytes,
+        type: a.contentType,
+        lastModified: Date.now(),
+      })),
+      ...this.selectedAttachments().map((s) => ({
+        name: s.file.name,
+        size: s.file.size,
+        type: s.file.type || 'application/octet-stream',
+        lastModified: s.file.lastModified,
+      })),
+    ];
+
+    const draftValue = {
+      basics: raw.basics,
+      market: raw.market,
+      feasibility: raw.feasibility,
+      financing: raw.financing,
+      milestones: raw.milestones,
+    };
+
+    const savedAt = Date.now();
+    this.drafts.save(uid, draftValue, savedAt, draftAttachments);
+    this.updateSavedDraftMetadata(savedAt, draftValue, draftAttachments);
+    this.toast.success('Your draft was saved locally on this device.');
+  }
+
+  protected openDraftViewer(): void {
+    const uid = this.authUser()?.uid;
+    if (uid) {
+      const draft = this.drafts.load(uid);
+      if (draft) {
+        this.updateSavedDraftMetadata(draft.savedAt, draft.value, draft.attachments ?? []);
+      } else {
+        this.savedDraftMetadata.set(null);
+      }
+    }
+    this.draftViewerOpen.set(true);
+  }
+
+  protected closeDraftViewer(): void {
+    this.draftViewerOpen.set(false);
+  }
+
+  protected restoreCurrentDraftFromStorage(): void {
+    const uid = this.authUser()?.uid;
+    if (!uid) return;
+    this.restoreDraft(uid);
+    this.draftViewerOpen.set(false);
+    this.toast.success('Draft restored into form.');
+  }
+
+  protected exportDraftJson(): void {
+    const raw = this.form.getRawValue();
+    const payload = this.buildIdeaPlanPayload();
+
+    const exportData = {
+      _schema: 'https://cedability.org/schemas/idea-draft-v1.json',
+      _exportedAt: new Date().toISOString(),
+      _status: 'draft',
+      idea: {
+        title: payload.title,
+        problem: payload.problem,
+        proposedSolution: payload.proposedSolution,
+        intendedBeneficiaries: payload.intendedBeneficiaries,
+        plannedLocation: payload.plannedLocation,
+        marketPlan: payload.marketPlan,
+        feasibilityPlan: payload.feasibilityPlan,
+        financingPlan: payload.financingPlan,
+        milestones: payload.milestones,
+        attachments: payload.attachments ?? [],
+        aiAnalysisConsent: raw.consent?.aiAnalysis ?? false,
+      },
+    };
+
+    const jsonString = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    const safeTitle = (payload.title || 'idea')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 30);
+    anchor.download = `cedability-draft-${safeTitle}-${Date.now()}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    this.toast.success('Draft downloaded as JSON.');
+  }
+
+  protected importDraftJson(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = reader.result as string;
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        const data = (parsed['idea'] ?? parsed) as Record<string, unknown>;
+
+        const financing = data['financingPlan'] as { costs?: Array<unknown> } | undefined;
+        const milestones = data['milestones'] as Array<unknown> | undefined;
+
+        this.resizeRows(
+          Array.isArray(financing?.costs) ? financing.costs.length : 1,
+          Array.isArray(milestones) ? milestones.length : 1,
+        );
+
+        this.form.patchValue({
+          basics: {
+            title: (data['title'] as string) ?? '',
+            problem: (data['problem'] as string) ?? '',
+            proposedSolution: (data['proposedSolution'] as string) ?? '',
+            intendedBeneficiaries: (data['intendedBeneficiaries'] as string) ?? '',
+            plannedLocation: (data['plannedLocation'] as string) ?? '',
+          },
+          market: (data['marketPlan'] as Record<string, string>) ?? {},
+          feasibility: (data['feasibilityPlan'] as Record<string, string>) ?? {},
+          financing: {
+            currency: (financing as { currency?: string })?.currency ?? 'BWP',
+            fundingSources: (financing as { fundingSources?: string })?.fundingSources ?? '',
+            costs: (financing?.costs as Array<{ item?: string; amount?: number; description?: string }>) ?? [],
+          },
+          milestones: (milestones as Array<{ title?: string; targetDate?: string; successMeasure?: string; estimatedCost?: number }>) ?? [],
+          consent: {
+            aiAnalysis: Boolean(data['aiAnalysisConsent']),
+          },
+        });
+
+        this.furthest.set(STEPS.length - 2);
+        this.draftRestored.set(true);
+        this.draftViewerOpen.set(false);
+
+        const uid = this.authUser()?.uid;
+        if (uid) {
+          this.saveDraft();
+        }
+
+        this.toast.success('Draft successfully imported from JSON file.');
+      } catch (err: unknown) {
+        console.error('Failed to import draft JSON file:', err);
+        this.toast.error('Could not import draft. Please check that the file is valid JSON.');
+      } finally {
+        input.value = '';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  private buildIdeaPlanPayload(): IdeaPlanPayload {
+    const v = this.form.getRawValue();
+    const costs = v.financing.costs.map((c) => ({
+      item: c.item.trim(),
+      amount: c.amount ?? 0,
+      description: c.description.trim(),
+    }));
+
+    return {
+      title: v.basics.title.trim(),
+      problem: v.basics.problem.trim(),
+      proposedSolution: v.basics.proposedSolution.trim(),
+      intendedBeneficiaries: v.basics.intendedBeneficiaries.trim(),
+      plannedLocation: v.basics.plannedLocation.trim(),
+      marketPlan: {
+        targetMarket: v.market.targetMarket.trim(),
+        alternatives: v.market.alternatives.trim(),
+        differentiation: v.market.differentiation.trim(),
+        marketValidation: v.market.marketValidation.trim(),
+      },
+      feasibilityPlan: {
+        technicalApproach: v.feasibility.technicalApproach.trim(),
+        operationalPlan: v.feasibility.operationalPlan.trim(),
+        validationEvidence: v.feasibility.validationEvidence.trim(),
+        assumptions: v.feasibility.assumptions.trim(),
+        risks: v.feasibility.risks.trim(),
+      },
+      financingPlan: {
+        currency: v.financing.currency,
+        totalFundingNeeded: sumCosts(costs),
+        fundingSources: v.financing.fundingSources.trim(),
+        costs,
+      },
+      milestones: v.milestones.map((m) => ({
+        title: m.title.trim(),
+        targetDate: m.targetDate,
+        successMeasure: m.successMeasure.trim(),
+        estimatedCost: m.estimatedCost,
+      })),
+      attachments: [
+        ...this.existingAttachments().map((a) => ({
+          name: a.name,
+          type: a.contentType,
+          sizeBytes: a.sizeBytes,
+        })),
+        ...this.selectedAttachments().map((s) => ({
+          name: s.file.name,
+          type: s.file.type || 'application/octet-stream',
+          sizeBytes: s.file.size,
+        })),
+      ],
+    };
+  }
+
+  private updateSavedDraftMetadata(
+    savedAt: number,
+    value: Record<string, unknown>,
+    attachments: DraftAttachmentMeta[],
+  ): void {
+    const basics = value['basics'] as Record<string, string> | undefined;
+    const financing = value['financing'] as
+      | { currency?: string; costs?: Array<{ amount?: number }> }
+      | undefined;
+    const milestones = value['milestones'] as Array<unknown> | undefined;
+    const costs = Array.isArray(financing?.costs) ? financing.costs : [];
+
+    this.savedDraftMetadata.set({
+      savedAt,
+      title: basics?.['title'] ?? '',
+      problem: Boolean(basics?.['problem']),
+      solution: Boolean(basics?.['proposedSolution']),
+      beneficiaries: basics?.['intendedBeneficiaries'] ?? '',
+      location: basics?.['plannedLocation'] ?? '',
+      currency: financing?.currency ?? 'BWP',
+      totalFunding: sumCosts(costs),
+      costItemCount: costs.length,
+      milestoneCount: Array.isArray(milestones) ? milestones.length : 0,
+      attachmentCount: attachments.length,
+    });
   }
 
   // ---- focus management (WCAG) ---------------------------------------------
@@ -502,10 +842,5 @@ export class IdeaComponent {
       () => this.host.nativeElement.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
       { injector: this.injector },
     );
-  }
-
-  saveDraft(){
-    console.log("Draft Saved");
-    
   }
 }

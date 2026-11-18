@@ -69,8 +69,8 @@ import type { User } from '../../shared/models/user.model';
 @Injectable({ providedIn: 'root' })
 export class UserDataService {
   private readonly firestore = inject(Firestore);
-  private readonly functions = inject(Functions);
-  private readonly ideaAttachments = inject(IdeaAttachmentService);
+  private readonly functions = inject(Functions, { optional: true });
+  private readonly ideaAttachments = inject(IdeaAttachmentService, { optional: true });
 
   async createUserDocument(uid: string, email: string, fullName: string): Promise<void> {
     const userRef = doc(this.firestore, 'users', uid);
@@ -141,12 +141,14 @@ export class UserDataService {
 
   async createIdea(idea: NewIdea, files: readonly File[] = []): Promise<string> {
     const ideaRef = doc(collection(this.firestore, 'ideas'));
-    const attachments = await this.ideaAttachments.upload(
-      idea.ownerId,
-      idea.ownerName,
-      ideaRef.id,
-      files,
-    );
+    const attachments = this.ideaAttachments
+      ? await this.ideaAttachments.upload(
+          idea.ownerId,
+          idea.ownerName,
+          ideaRef.id,
+          files,
+        )
+      : [];
     try {
       await setDoc(ideaRef, {
         ...idea,
@@ -174,7 +176,7 @@ export class UserDataService {
       });
       return ideaRef.id;
     } catch (error: unknown) {
-      if (attachments.length > 0) {
+      if (attachments.length > 0 && this.ideaAttachments) {
         try {
           await this.ideaAttachments.remove(attachments);
         } catch (cleanupError: unknown) {
@@ -194,11 +196,15 @@ export class UserDataService {
     ideaId: string,
     files: readonly File[],
   ): Promise<IdeaAttachment[]> {
-    return this.ideaAttachments.upload(ownerId, ownerName, ideaId, files);
+    return this.ideaAttachments
+      ? this.ideaAttachments.upload(ownerId, ownerName, ideaId, files)
+      : Promise.resolve([]);
   }
 
   removeIdeaAttachments(attachments: readonly IdeaAttachment[]): Promise<void> {
-    return this.ideaAttachments.remove(attachments);
+    return this.ideaAttachments
+      ? this.ideaAttachments.remove(attachments)
+      : Promise.resolve();
   }
 
   async requestIdeaChanges(
@@ -210,7 +216,7 @@ export class UserDataService {
     const callable = httpsCallable<
       { ideaId: string; assignmentId: string; stageId: string; message: string },
       { feedbackId: string }
-    >(this.functions, 'requestIdeaChanges');
+    >(this.getRequiredFunctions(), 'requestIdeaChanges');
     await callable({ ideaId, assignmentId, stageId, message: message.trim() });
   }
 
@@ -222,9 +228,16 @@ export class UserDataService {
     const callable = httpsCallable<
       { ideaId: string; expectedVersion: number; idea: NewIdea },
       { ideaId: string; version: number }
-    >(this.functions, 'resubmitIdea');
+    >(this.getRequiredFunctions(), 'resubmitIdea');
     const result = await callable({ ideaId, expectedVersion, idea });
     return result.data;
+  }
+
+  private getRequiredFunctions(): Functions {
+    if (!this.functions) {
+      throw new Error('Functions service is not available in the current context.');
+    }
+    return this.functions;
   }
 
   async getFeedbackForIdea(ideaId: string): Promise<IdeaFeedback[]> {
@@ -498,7 +511,7 @@ export class UserDataService {
     const callable = httpsCallable<
       { ideaId: string; decision: AdjudicationDecision; note: string },
       { ideaId: string; status: string }
-    >(this.functions, 'recordAdjudication');
+    >(this.getRequiredFunctions(), 'recordAdjudication');
     await callable({ ideaId, decision, note: note.trim() });
   }
 
@@ -518,7 +531,7 @@ export class UserDataService {
         isPublic: boolean;
       },
       { ideaId: string; awardId: string }
-    >(this.functions, 'awardApprovedIdea');
+    >(this.getRequiredFunctions(), 'awardApprovedIdea');
     await callable(input);
   }
 

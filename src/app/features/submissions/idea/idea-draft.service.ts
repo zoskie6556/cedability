@@ -2,10 +2,18 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 
 /** What we keep in the draft: the form values (never the consent tick). */
+export interface DraftAttachmentMeta {
+  name: string;
+  size: number;
+  type: string;
+  lastModified: number;
+}
+
 export interface IdeaDraft {
   version: 1;
   savedAt: number;
   value: Record<string, unknown>;
+  attachments?: DraftAttachmentMeta[];
 }
 
 /**
@@ -30,9 +38,14 @@ export class IdeaDraftService {
     }
   }
 
-  save(uid: string, value: Record<string, unknown>, savedAt: number): void {
+  save(
+    uid: string,
+    value: Record<string, unknown>,
+    savedAt: number,
+    attachments: DraftAttachmentMeta[] = [],
+  ): void {
     try {
-      const draft: IdeaDraft = { version: 1, savedAt, value };
+      const draft: IdeaDraft = { version: 1, savedAt, value, attachments };
       this.storage?.setItem(this.key(uid), JSON.stringify(draft));
     } catch {
       // Storage unavailable or full: the form still works, it just cannot autosave.

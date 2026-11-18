@@ -31,6 +31,8 @@ describe('ProfileComponent', () => {
     emailVerified: false,
     phoneNumberVerified: false,
     role: 'submitter',
+    evaluatorType: null,
+    organization: null,
     profile: {
       userType: 'individual',
       profession: '',

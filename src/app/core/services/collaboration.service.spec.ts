@@ -53,6 +53,8 @@ describe('CollaborationService', () => {
     emailVerified: true,
     phoneNumberVerified: false,
     role: 'submitter',
+    evaluatorType: null,
+    organization: null,
     profile: {
       userType: 'individual',
       profession: 'Analytical Engineer',

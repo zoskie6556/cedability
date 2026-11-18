@@ -13,6 +13,7 @@ import { UserDataService } from '../../../core/services/user-data.service';
 import { SpeechService } from '../../../core/services/speech.service';
 import { IdeaComponent } from './idea.component';
 import { IdeaDraftService } from './idea-draft.service';
+import { IdeaAiScreeningService } from '../../../core/services/idea-ai-screening.service';
 import { buildIdeaForm, toNewIdea } from './idea-form';
 import type { Idea } from '../../../shared/models/idea.model';
 
@@ -102,6 +103,22 @@ describe('IdeaComponent', () => {
   };
   const router = {
     navigate: vi.fn(),
+  };
+
+  const aiScreeningService = {
+    screenIdea: vi.fn().mockResolvedValue({
+      summary: 'Mock AI summary: idea looks feasible.',
+      uniquenessRating: 'moderate' as const,
+      uniquenessComment: 'The idea is reasonably unique.',
+      feasibilityRating: 'high' as const,
+      feasibilityComment: 'The idea is technically feasible.',
+      readinessRating: 'ready' as const,
+      readinessComment: 'Ready to submit to evaluators.',
+      strengths: ['Clear problem statement'],
+      recommendations: [],
+      targetStepToTouchup: null,
+      automatedReview: null,
+    }),
   };
 
   beforeEach(async () => {
@@ -235,6 +252,11 @@ describe('IdeaComponent', () => {
     if (!EventConstructor) throw new Error('Could not access the form event constructor.');
     form.dispatchEvent(new EventConstructor('submit', { bubbles: true, cancelable: true }));
     await fixture.whenStable();
+    fixture.detectChanges();
+
+    const finalSubmit = fixture.nativeElement.querySelector('.screening-footer .primary') as HTMLButtonElement | null;
+    finalSubmit?.click();
+    await fixture.whenStable();
 
     const expectedForm = buildIdeaForm(new FormBuilder().nonNullable);
     expectedForm.patchValue(answers);
@@ -291,6 +313,11 @@ describe('IdeaComponent', () => {
     if (!EventConstructor) throw new Error('Could not access the form event constructor.');
     form.dispatchEvent(new EventConstructor('submit', { bubbles: true, cancelable: true }));
     await fixture.whenStable();
+    fixture.detectChanges();
+
+    const finalSubmit = fixture.nativeElement.querySelector('.screening-footer .primary') as HTMLButtonElement | null;
+    finalSubmit?.click();
+    await fixture.whenStable();
 
     const expectedForm = buildIdeaForm(new FormBuilder().nonNullable);
     expectedForm.patchValue(answers);
@@ -301,5 +328,40 @@ describe('IdeaComponent', () => {
     );
     expect(userDataService.createIdea).not.toHaveBeenCalled();
     expect(toastService.success).toHaveBeenCalledWith('Your updated idea was resubmitted.');
+  });
+
+  it('saves the idea draft locally when the save draft button is clicked', async () => {
+    const fixture = TestBed.createComponent(IdeaComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const formModel = Reflect.get(fixture.componentInstance, 'form') as ReturnType<
+      typeof buildIdeaForm
+    >;
+    formModel.patchValue(answers);
+    fixture.detectChanges();
+
+    const saveDraftBtn = fixture.nativeElement.querySelector('.top-utility .draft-btn:last-child') as HTMLButtonElement;
+    saveDraftBtn.click();
+
+    expect(toastService.success).toHaveBeenCalledWith('Your draft was saved locally on this device.');
+  });
+
+  it('opens and closes the draft viewer modal', async () => {
+    const fixture = TestBed.createComponent(IdeaComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const viewDraftBtn = fixture.nativeElement.querySelector('.top-utility .draft-btn:first-child') as HTMLButtonElement;
+    viewDraftBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Saved Idea Draft');
+
+    const closeBtn = fixture.nativeElement.querySelector('.icon-close-btn') as HTMLButtonElement;
+    closeBtn.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Saved Idea Draft');
   });
 });

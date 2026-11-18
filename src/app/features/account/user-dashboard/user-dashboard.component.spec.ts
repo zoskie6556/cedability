@@ -53,6 +53,8 @@ describe('UserDashboardComponent', () => {
       emailVerified: true,
       phoneNumberVerified: false,
       role,
+      evaluatorType: null,
+      organization: null,
       profile: {
         userType: 'individual',
         profession: 'Engineer',
@@ -84,12 +86,12 @@ describe('UserDashboardComponent', () => {
     authService.getCurrentUser.mockReset().mockResolvedValue(authUser);
     userDataService.getOrCreateUser.mockReset();
     collaborationService.getOverview.mockReset().mockResolvedValue(makeOverview());
-    collaborationService.syncDiscoverableProfile.mockReset().mockResolvedValue();
+    collaborationService.syncDiscoverableProfile.mockReset().mockResolvedValue(undefined as never);
     collaborationService.searchDirectory.mockReset().mockResolvedValue([]);
-    collaborationService.setDiscoverable.mockReset().mockResolvedValue();
-    collaborationService.sendRequest.mockReset().mockResolvedValue();
-    collaborationService.respondToRequest.mockReset().mockResolvedValue();
-    collaborationService.cancelRequest.mockReset().mockResolvedValue();
+    collaborationService.setDiscoverable.mockReset().mockResolvedValue(undefined as never);
+    collaborationService.sendRequest.mockReset().mockResolvedValue(undefined as never);
+    collaborationService.respondToRequest.mockReset().mockResolvedValue(undefined as never);
+    collaborationService.cancelRequest.mockReset().mockResolvedValue(undefined as never);
     newsletterSubscriptionService.getPreferences.mockReset().mockResolvedValue({
       newsletter: false,
       promotions: false,
@@ -98,7 +100,7 @@ describe('UserDashboardComponent', () => {
       createdAt: null,
       updatedAt: null,
     });
-    newsletterSubscriptionService.savePreferences.mockReset().mockResolvedValue();
+    newsletterSubscriptionService.savePreferences.mockReset().mockResolvedValue(undefined as never);
     toastService.error.mockReset();
     toastService.success.mockReset();
 
@@ -207,8 +209,9 @@ describe('UserDashboardComponent', () => {
       expect(fixture.nativeElement.querySelector('#newsletter-opt-in')?.checked).toBe(true);
     });
 
-    const unsubscribeButton = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
-      (button: HTMLButtonElement) => button.textContent?.trim() === 'Unsubscribe from all',
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+    const unsubscribeButton = buttons.find(
+      (button) => button.textContent?.trim() === 'Unsubscribe from all',
     );
     unsubscribeButton?.click();
 
@@ -250,8 +253,9 @@ describe('UserDashboardComponent', () => {
       expect(fixture.nativeElement.textContent).toContain('Grace Hopper');
     });
 
-    const acceptButton = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
-      (button: HTMLButtonElement) => button.textContent?.trim() === 'Accept',
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+    const acceptButton = buttons.find(
+      (button) => button.textContent?.trim() === 'Accept',
     );
     acceptButton?.click();
     await vi.waitFor(() =>

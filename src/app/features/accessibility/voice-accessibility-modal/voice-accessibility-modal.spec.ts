@@ -1,17 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { VoiceAccessibilityModal } from './voice-accessibility-modal';
+import { VoiceAccessibilityModalComponent } from './voice-accessibility-modal';
 
-describe('VoiceAccessibilityModal', () => {
-  let component: VoiceAccessibilityModal;
-  let fixture: ComponentFixture<VoiceAccessibilityModal>;
+describe('VoiceAccessibilityModalComponent', () => {
+  let component: VoiceAccessibilityModalComponent;
+  let fixture: ComponentFixture<VoiceAccessibilityModalComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [VoiceAccessibilityModal],
+      imports: [VoiceAccessibilityModalComponent],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(VoiceAccessibilityModal);
+    fixture = TestBed.createComponent(VoiceAccessibilityModalComponent);
     component = fixture.componentInstance;
     await fixture.whenStable();
   });
