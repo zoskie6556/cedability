@@ -1,4 +1,4 @@
-<!-- <main id="main-content" class="agent-console" [attr.aria-busy]="loading()">
+<main id="main-content" class="agent-console" [attr.aria-busy]="loading()">
   @if (loading()) {
     <app-idea-loader label="Loading the chat console" />
   } @else if (!authorized()) {
@@ -36,7 +36,10 @@
           <article class="queue-item">
             <div>
               <p class="queue-item-name">{{ chat.userName }}</p>
-              <p class="queue-item-time">Waiting since {{ chat.startedAt | date: 'shortTime' }}</p>
+              <p class="queue-item-time">
+                {{ chat.status === 'offline_message' ? 'Left a message at' : 'Waiting since' }}
+                {{ chat.startedAt | date: 'shortTime' }}
+              </p>
             </div>
             <button type="button" class="queue-claim" (click)="claim(chat)">Claim</button>
           </article>
@@ -79,4 +82,4 @@
       </section>
     </div>
   }
-</main> -->
+</main>

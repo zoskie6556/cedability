@@ -1,38 +1,60 @@
-export type SenderRole = 'guest' | 'user' | 'agent' | 'system';
-export type DeliveryStatus = 'queued' | 'sent' | 'failed';
+export type ChatStatus = 'waiting' | 'active' | 'closed' | 'offline_message';
+
+export interface ChatSession {
+  id: string;
+  userId: string;
+  userName: string;
+  status: ChatStatus;
+  handledBy: string | null;
+  handledByName: string | null;
+  startedAt: Date;
+  updatedAt: Date;
+  closedAt: Date | null;
+}
 
 export interface ChatMessage {
   id: string;
-  content: string;
-  senderRole: SenderRole;
-  timestamp: number;
-  status: DeliveryStatus;
-  isOfflineDraft?: boolean;
+  chatId: string;
+  senderUid: string;
+  senderRole: string; // 'submitter' | 'agent' | 'admin' | 'system' ...
+  text: string;
+  createdAt: Date | null;
 }
 
-export interface ChatSessionContext {
-  isAuthenticated: boolean;
-  guestId: string;
-  userId?: string;
-}
-
-export interface ChatRoomRecord {
-  id: string;
-  ownerId: string;
-  displayName?: string;
-  status: 'open' | 'closed';
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface BusinessHoursConfig {
-  timezone: string;
-  startHour: number;
-  endHour: number;
-  workingDays: number[];
-}
-
-export interface AvailabilityStatus {
+export interface AgentPresence {
+  uid: string;
+  name: string;
   isAvailable: boolean;
-  reason?: string;
+  maxConcurrentChats: number;
+}
+
+export interface ChatBusinessHours {
+  enabled: boolean;
+  open: string; // 'HH:mm'
+  close: string; // 'HH:mm'
+  workingDays: string[]; // 'mon'..'sun'
+  timezone: string;
+}
+
+export interface ChatAvailability {
+  withinBusinessHours: boolean;
+  agentAvailable: boolean;
+}
+
+/** Mirrors the document the admin Settings page writes to `settings/chat`. */
+export interface ChatSettings {
+  isEnabled: boolean;
+  openTime: string;
+  closeTime: string;
+  workingDays: string[];
+  timezone: string;
+  maxConcurrentChats: number;
+  profanityEnabled: boolean;
+  profanityAction: 'block' | 'mask' | 'warn_and_ban';
+  profanityStrikeLimit: number;
+  banDurationHours: number;
+  blockedTerms: string[];
+  autoReplyWaitSeconds: number;
+  waitingAutoReply: string;
+  offlineAutoReply: string;
 }

@@ -18,7 +18,7 @@ export class GeminiLiveService implements OnDestroy {
   private nextPlaybackTime = 0;
   private audioChunkCount = 0;
 
-  private readonly model = 'gemini-2.5-flash';
+  private readonly model = 'gemini-2.5-flash-native-audio-preview-12-2025';
   private readonly systemInstruction =
     'You are a hands-free voice accessibility assistant helping users who cannot see or type draft, structure, and refine their ideas clearly and concisely.';
 
@@ -48,7 +48,12 @@ export class GeminiLiveService implements OnDestroy {
     this.audioChunkCount = 0;
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          apiVersion: 'v1alpha',
+        },
+      });
       console.log('[GeminiLive] Connecting via ai.live.connect...');
 
       this.session = await ai.live.connect({
@@ -76,7 +81,11 @@ export class GeminiLiveService implements OnDestroy {
             this.statusMessage.set('Voice connection error. Try again.');
           },
           onclose: (event) => {
-            console.log('[GeminiLive] Live session closed', event);
+            console.error('[GeminiLive] Live session closed', {
+              code: event.code,
+              reason: event.reason,
+              wasClean: event.wasClean,
+            });
             if (this.sessionState() !== 'error') {
               this.sessionState.set('idle');
               this.statusMessage.set('Voice session closed.');

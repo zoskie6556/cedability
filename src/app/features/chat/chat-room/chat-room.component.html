@@ -1,4 +1,4 @@
-<!-- <aside class="chat-aside" aria-label="CEDAbility Support Chat">
+<aside class="chat-aside" aria-label="CEDAbility Support Chat">
   <header class="chat-toolbar">
     <div class="brand-block">
       <div class="brand-title-row">
@@ -15,11 +15,11 @@
         type="button"
         class="toolbar-btn"
         (click)="clearChat()"
-        title="Clear conversation"
+        title="Clear conversation view"
       >
         Clear
       </button>
-      @if (chat()?.status === 'open') {
+      @if (chat()?.status && chat()?.status !== 'closed') {
         <button
           type="button"
           class="toolbar-btn subtle"
@@ -40,7 +40,7 @@
 
     @if (!session().isAuthenticated) {
       <div class="guest-notice" role="status">
-        You are currently chatting as a <strong>Guest</strong>. Your messages are saved locally and can sync once you sign in.
+        You are currently chatting as a <strong>Guest</strong>. Sign in to link your history across sessions.
       </div>
     } @else {
       <div class="auth-notice" role="status">
@@ -50,7 +50,13 @@
 
     @if (!isOnline()) {
       <div class="offline-notice" role="alert">
-        You are offline — messages are queued and sent automatically when connection returns.
+        You appear to be offline — check your connection to send real-time messages.
+      </div>
+    }
+
+    @if (errorMessage()) {
+      <div class="offline-notice" role="alert">
+        {{ errorMessage() }}
       </div>
     }
   </section>
@@ -121,26 +127,18 @@
       </div>
 
       <div class="composer-buttons">
-        @if (isOnline()) {
-          <button
-            type="button"
-            class="secondary-btn"
-            (click)="retryQueued()"
-          >
-            Sync
-          </button>
-        }
         <button
           type="submit"
           class="primary-btn"
           [disabled]="!draftText.trim()"
         >
-          {{ isOnline() ? 'Send' : 'Queue' }}
+          Send
         </button>
       </div>
     </div>
   </form>
-</aside> -->
+</aside>
+
 <p class="chat-footer-note">
   Messages are sent in real-time. If offline, they will be queued.
 </p>
