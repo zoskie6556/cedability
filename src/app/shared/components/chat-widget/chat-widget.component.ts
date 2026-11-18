@@ -10,7 +10,7 @@ import { Auth, authState } from '@angular/fire/auth';
 import { ChatModerationError, ChatService } from '../../../core/services/chat.service';
 import { UserDataService } from '../../../core/services/user-data.service';
 import type { ChatBusinessHours, ChatMessage, ChatSession } from '../../models/chat.model';
-//import { IdeaLoaderComponent } from '../idea-loader/idea-loader.component';
+import { IdeaLoaderComponent } from '../idea-loader/idea-loader.component';
 import { ChatConversationComponent } from '../chat-conversation/chat-conversation.component';
 
 /** Roles that have their own chat console and do not need the client widget. */
@@ -18,7 +18,7 @@ const STAFF_ROLES = new Set(['agent', 'admin']);
 
 @Component({
   selector: 'app-chat-widget',
-  imports: [ ],
+  imports: [ IdeaLoaderComponent, ChatConversationComponent],
   templateUrl: './chat-widget.component.html',
   styleUrl: './chat-widget.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
