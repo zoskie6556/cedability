@@ -152,6 +152,52 @@ describe('IdeaComponent', () => {
     expect(userDataService.createIdea).not.toHaveBeenCalled();
   });
 
+  it('lets a submitter select and remove a supported attachment', async () => {
+    const fixture = TestBed.createComponent(IdeaComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector('#idea-attachments') as HTMLInputElement;
+    const eventConstructor = input.ownerDocument.defaultView?.Event;
+    if (!eventConstructor) throw new Error('Could not access the attachment input event constructor.');
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [new File(['sketch'], 'garden-sketch.png', { type: 'image/png' })],
+    });
+    input.dispatchEvent(new eventConstructor('change', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('garden-sketch.png');
+    expect(fixture.nativeElement.textContent).toContain('Image');
+    const removeButton = fixture.nativeElement.querySelector(
+      'button[aria-label="Remove garden-sketch.png"]',
+    ) as HTMLButtonElement;
+    removeButton.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('garden-sketch.png');
+  });
+
+  it('explains why an unsupported file was not added', async () => {
+    const fixture = TestBed.createComponent(IdeaComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector('#idea-attachments') as HTMLInputElement;
+    const eventConstructor = input.ownerDocument.defaultView?.Event;
+    if (!eventConstructor) throw new Error('Could not access the attachment input event constructor.');
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [new File(['binary'], 'application.exe', { type: 'application/octet-stream' })],
+    });
+    input.dispatchEvent(new eventConstructor('change', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Choose a PDF, image, Word, Excel');
+    expect(fixture.nativeElement.textContent).not.toContain('application.exe');
+  });
+
   it('submits the toNewIdea output for the authenticated user', async () => {
     const fixture = TestBed.createComponent(IdeaComponent);
     fixture.detectChanges();

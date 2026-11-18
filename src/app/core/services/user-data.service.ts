@@ -18,6 +18,14 @@ import {
 } from '@angular/fire/firestore';
 import { Functions, httpsCallable } from '@angular/fire/functions';
 import { Timestamp } from 'firebase/firestore';
+import { IdeaAttachmentService } from './idea-attachment.service';
+import type { IdeaAttachment } from '../../shared/models/idea-attachment.model';
+import {
+  isIdeaAttachmentContentType,
+  isIdeaAttachmentPath,
+  MAX_IDEA_ATTACHMENT_BYTES,
+  MAX_IDEA_ATTACHMENTS,
+} from '../../shared/models/idea-attachment.model';
 import { isIdeaCategory } from '../../shared/models/automated-review.model';
 import { parseEvaluationCriteriaSet } from '../../shared/models/idea-evaluation.model';
 import type {
@@ -62,6 +70,7 @@ import type { User } from '../../shared/models/user.model';
 export class UserDataService {
   private readonly firestore = inject(Firestore);
   private readonly functions = inject(Functions);
+  private readonly ideaAttachments = inject(IdeaAttachmentService);
 
   async createUserDocument(uid: string, email: string, fullName: string): Promise<void> {
     const userRef = doc(this.firestore, 'users', uid);
@@ -130,33 +139,66 @@ export class UserDataService {
     });
   }
 
-  async createIdea(idea: NewIdea): Promise<string> {
-    const ideaCollection = collection(this.firestore, 'ideas');
-    const document = await addDoc(ideaCollection, {
-      ...idea,
-      status: 'submitted',
-      version: 1,
-      submittedAt: serverTimestamp(),
-      aiAnalysisConsentAt: serverTimestamp(),
-      automatedReview: {
-        status: 'queued',
-        model: 'gemini-3.5-flash-lite',
-        rubricVersion: 'cedability-v1',
-        summary: '',
-        criteria: null,
-        strengths: [],
-        informationGaps: [],
-        questionsForHumanEvaluator: [],
-        limitations: [],
-        startedAt: null,
-        completedAt: null,
-        failureMessage: null,
-      },
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+  async createIdea(idea: NewIdea, files: readonly File[] = []): Promise<string> {
+    const ideaRef = doc(collection(this.firestore, 'ideas'));
+    const attachments = await this.ideaAttachments.upload(
+      idea.ownerId,
+      idea.ownerName,
+      ideaRef.id,
+      files,
+    );
+    try {
+      await setDoc(ideaRef, {
+        ...idea,
+        attachments: [...idea.attachments, ...attachments],
+        status: 'submitted',
+        version: 1,
+        submittedAt: serverTimestamp(),
+        aiAnalysisConsentAt: serverTimestamp(),
+        automatedReview: {
+          status: 'queued',
+          model: 'gemini-3.5-flash-lite',
+          rubricVersion: 'cedability-v1',
+          summary: '',
+          criteria: null,
+          strengths: [],
+          informationGaps: [],
+          questionsForHumanEvaluator: [],
+          limitations: [],
+          startedAt: null,
+          completedAt: null,
+          failureMessage: null,
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return ideaRef.id;
+    } catch (error: unknown) {
+      if (attachments.length > 0) {
+        try {
+          await this.ideaAttachments.remove(attachments);
+        } catch (cleanupError: unknown) {
+          console.error('Could not clean up attachments after an idea creation failure', {
+            error,
+            cleanupError,
+          });
+        }
+      }
+      throw error;
+    }
+  }
 
-    return document.id;
+  uploadIdeaAttachments(
+    ownerId: string,
+    ownerName: string,
+    ideaId: string,
+    files: readonly File[],
+  ): Promise<IdeaAttachment[]> {
+    return this.ideaAttachments.upload(ownerId, ownerName, ideaId, files);
+  }
+
+  removeIdeaAttachments(attachments: readonly IdeaAttachment[]): Promise<void> {
+    return this.ideaAttachments.remove(attachments);
   }
 
   async requestIdeaChanges(
@@ -629,6 +671,7 @@ export class UserDataService {
 
   private parseIdea(id: string, value: unknown): Idea {
     const idea = requireRecord(value, 'idea');
+    const ownerId = requireString(idea['ownerId'], 'ownerId');
     const createdAt = requireTimestampOrNull(idea['createdAt'], 'createdAt');
     const submittedAt =
       idea['submittedAt'] === undefined
@@ -637,7 +680,7 @@ export class UserDataService {
 
     return {
       id,
-      ownerId: requireString(idea['ownerId'], 'ownerId'),
+      ownerId,
       ownerName: requireString(idea['ownerName'], 'ownerName'),
       title: requireString(idea['title'], 'title'),
       problem: requireString(idea['problem'], 'problem'),
@@ -648,6 +691,7 @@ export class UserDataService {
       feasibilityPlan: parseFeasibilityPlan(idea['feasibilityPlan']),
       financingPlan: parseFinancingPlan(idea['financingPlan']),
       milestones: parseMilestones(idea['milestones']),
+      attachments: parseIdeaAttachments(idea['attachments'], ownerId, id),
       aiAnalysisConsent: idea['aiAnalysisConsent'] === true,
       category: parseIdeaCategory(idea['category']),
       similarityCheck: parseSimilarityCheck(idea['similarityCheck']),
@@ -791,6 +835,37 @@ function requireArray(value: unknown, fieldName: string): unknown[] {
 
 function requireStringArray(value: unknown, fieldName: string): string[] {
   return requireArray(value, fieldName).map((item) => requireString(item, fieldName));
+}
+
+function parseIdeaAttachments(value: unknown, ownerId: string, ideaId: string): IdeaAttachment[] {
+  if (value === undefined) return [];
+  const rawAttachments = requireArray(value, 'idea attachments');
+  if (rawAttachments.length > MAX_IDEA_ATTACHMENTS) {
+    throw new Error('The Firestore idea attachments list is too long.');
+  }
+
+  return rawAttachments.map((rawAttachment) => {
+    const attachment = requireRecord(rawAttachment, 'idea attachment');
+    const id = requireString(attachment['id'], 'attachment id');
+    const name = requireString(attachment['name'], 'attachment name');
+    const storagePath = attachment['storagePath'];
+    const contentType = attachment['contentType'];
+    const sizeBytes = attachment['sizeBytes'];
+    if (
+      !name ||
+      name.length > 255 ||
+      !isIdeaAttachmentContentType(contentType) ||
+      !isIdeaAttachmentPath(storagePath, ownerId, ideaId, id) ||
+      typeof sizeBytes !== 'number' ||
+      !Number.isSafeInteger(sizeBytes) ||
+      sizeBytes < 1 ||
+      sizeBytes > MAX_IDEA_ATTACHMENT_BYTES
+    ) {
+      throw new Error('The Firestore idea attachment data is invalid.');
+    }
+
+    return { id, name, storagePath, contentType, sizeBytes };
+  });
 }
 
 function requireTimestampOrNull(value: unknown, fieldName: string): Timestamp | null {

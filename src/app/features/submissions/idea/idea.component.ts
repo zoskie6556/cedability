@@ -19,7 +19,17 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { debounceTime, map } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { UserDataService } from '../../../core/services/user-data.service';
+import type { IdeaAttachment } from '../../../shared/models/idea-attachment.model';
+import {
+  MAX_IDEA_ATTACHMENT_BYTES,
+  MAX_IDEA_ATTACHMENTS,
+} from '../../../shared/models/idea-attachment.model';
 import { IdeaLoaderComponent } from '../../../shared/components/idea-loader/idea-loader.component';
+import {
+  attachmentAcceptTypes,
+  attachmentErrorFor,
+  attachmentTypeFor,
+} from '../../../shared/models/idea-attachment-policy';
 import { IdeaDraftService } from './idea-draft.service';
 import { IdeaFieldComponent } from './idea-field/idea-field.component';
 import {
@@ -44,6 +54,11 @@ const LANGUAGES = [
 ] as const;
 
 const CURRENCIES = ['BWP', 'USD', 'ZAR'] as const;
+
+interface SelectedAttachment {
+  file: File;
+  uploaded: IdeaAttachment | null;
+}
 
 /**
  * The idea submission page: a 6-step, accessible form.
@@ -81,6 +96,16 @@ export class IdeaComponent {
   protected readonly furthest = signal(0);
   protected readonly language = signal<string>(LANGUAGES[0].tag);
   protected readonly submitting = signal(false);
+  protected readonly selectedAttachments = signal<SelectedAttachment[]>([]);
+  protected readonly existingAttachments = signal<IdeaAttachment[]>([]);
+  protected readonly attachmentError = signal<string | null>(null);
+  protected readonly isDraggingFiles = signal(false);
+  protected readonly removingAttachment = signal(false);
+  protected readonly attachmentAccept = attachmentAcceptTypes();
+  protected readonly attachmentLimits = {
+    count: MAX_IDEA_ATTACHMENTS,
+    sizeMb: MAX_IDEA_ATTACHMENT_BYTES / (1024 * 1024),
+  };
   protected readonly draftRestored = signal(false);
   protected readonly loadingIdea = signal(
     this.route.snapshot.paramMap.get('ideaId') !== null,
@@ -215,6 +240,61 @@ export class IdeaComponent {
     this.language.set((event.target as HTMLSelectElement).value);
   }
 
+  protected onAttachmentSelection(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.addAttachments(Array.from(input.files ?? []));
+    input.value = '';
+  }
+
+  protected onAttachmentDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.isDraggingFiles.set(true);
+  }
+
+  protected onAttachmentDragLeave(event: DragEvent): void {
+    const target = event.currentTarget;
+    const related = event.relatedTarget;
+    if (!(target instanceof Node) || !(related instanceof Node) || !target.contains(related)) {
+      this.isDraggingFiles.set(false);
+    }
+  }
+
+  protected onAttachmentDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.isDraggingFiles.set(false);
+    this.addAttachments(Array.from(event.dataTransfer?.files ?? []));
+  }
+
+  protected async removeSelectedAttachment(index: number): Promise<void> {
+    if (this.removingAttachment()) return;
+    const selected = this.selectedAttachments()[index];
+    if (!selected) return;
+
+    this.removingAttachment.set(true);
+    try {
+      if (selected.uploaded) {
+        await this.userData.removeIdeaAttachments([selected.uploaded]);
+      }
+      this.selectedAttachments.update((items) => items.filter((_, itemIndex) => itemIndex !== index));
+      this.attachmentError.set(null);
+    } catch (error: unknown) {
+      console.error('Could not remove the selected attachment', error);
+      this.toast.error('We could not remove that file. Please try again.');
+    } finally {
+      this.removingAttachment.set(false);
+    }
+  }
+
+  protected attachmentCategory(file: File): string {
+    return attachmentTypeFor(file.name)?.category ?? 'File';
+  }
+
+  protected attachmentSize(file: File): string {
+    return file.size < 1024 * 1024
+      ? `${Math.max(1, Math.round(file.size / 1024))} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   // ---- drafts ---------------------------------------------------------------
 
   protected startFresh(): void {
@@ -226,6 +306,9 @@ export class IdeaComponent {
     this.step.set(0);
     this.furthest.set(0);
     this.draftRestored.set(false);
+    this.selectedAttachments.set([]);
+    this.existingAttachments.set([]);
+    this.attachmentError.set(null);
   }
 
   private restoreDraft(uid: string): void {
@@ -260,6 +343,7 @@ export class IdeaComponent {
 
       this.resizeRows(idea.financingPlan.costs.length, idea.milestones.length);
       this.form.patchValue(toIdeaFormValue(idea));
+      this.existingAttachments.set(idea.attachments);
       this.loadedVersion.set(idea.version);
       this.furthest.set(STEPS.length - 1);
     } catch (error: unknown) {
@@ -281,6 +365,57 @@ export class IdeaComponent {
     while (this.milestones.length > Math.max(1, milestoneRows)) {
       this.milestones.removeAt(this.milestones.length - 1);
     }
+  }
+
+  private addAttachments(files: readonly File[]): void {
+    const next = [...this.selectedAttachments()];
+    const errors: string[] = [];
+    for (const file of files) {
+      const error = attachmentErrorFor(file);
+      if (error) {
+        errors.push(`${file.name}: ${error}`);
+        continue;
+      }
+      if (this.existingAttachments().length + next.length >= MAX_IDEA_ATTACHMENTS) {
+        errors.push(`You can attach up to ${MAX_IDEA_ATTACHMENTS} files.`);
+        break;
+      }
+      if (next.some((item) =>
+        item.file.name === file.name &&
+        item.file.size === file.size &&
+        item.file.lastModified === file.lastModified,
+      )) {
+        continue;
+      }
+      next.push({ file, uploaded: null });
+    }
+
+    this.selectedAttachments.set(next);
+    this.attachmentError.set(errors.length ? errors.join(' ') : null);
+  }
+
+  private async uploadPendingAttachments(
+    ideaId: string,
+    ownerId: string,
+    ownerName: string,
+  ): Promise<void> {
+    const pending = this.selectedAttachments().filter((item) => item.uploaded === null);
+    if (pending.length === 0) return;
+
+    const uploaded = await this.userData.uploadIdeaAttachments(
+      ownerId,
+      ownerName,
+      ideaId,
+      pending.map((item) => item.file),
+    );
+    const uploadedByFile = new Map(
+      pending.map((item, index) => [item.file, uploaded[index]] as const),
+    );
+    this.selectedAttachments.update((items) =>
+      items.map((item) =>
+        item.uploaded ? item : { ...item, uploaded: uploadedByFile.get(item.file) ?? null },
+      ),
+    );
   }
 
   // ---- submit ---------------------------------------------------------------
@@ -316,16 +451,27 @@ export class IdeaComponent {
     try {
       const profile = await this.userData.getOrCreateUser(authUser);
       const ownerName = profile.fullName.trim() || 'Applicant';
-      const idea = toNewIdea(this.form, authUser.uid, ownerName);
       const ideaId = this.routeIdeaId();
       if (ideaId) {
         const version = this.loadedVersion();
         if (version === null) {
           throw new Error('The idea version is unavailable. Reload the form before resubmitting.');
         }
+        await this.uploadPendingAttachments(ideaId, authUser.uid, ownerName);
+        const attachments = [
+          ...this.existingAttachments(),
+          ...this.selectedAttachments().flatMap((item) => item.uploaded ? [item.uploaded] : []),
+        ];
+        const idea = toNewIdea(this.form, authUser.uid, ownerName, attachments);
         await this.userData.resubmitIdea(ideaId, version, idea);
       } else {
-        await this.userData.createIdea(idea);
+        const idea = toNewIdea(this.form, authUser.uid, ownerName);
+        const files = this.selectedAttachments().map((item) => item.file);
+        if (files.length > 0) {
+          await this.userData.createIdea(idea, files);
+        } else {
+          await this.userData.createIdea(idea);
+        }
       }
       this.submitted = true;
       if (!ideaId) this.drafts.clear(authUser.uid);

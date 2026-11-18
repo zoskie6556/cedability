@@ -1,22 +1,70 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
 
-    // This rule allows anyone with your Storage bucket reference to view, edit,
-    // and delete all data in your Storage bucket. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Storage bucket will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Storage bucket will be denied until you Update
-    // your rules
+    function ideaDocumentPath(ideaId) {
+      return /databases/(default)/documents/ideas/$(ideaId);
+    }
+
+    function isInternalEvaluator() {
+      return request.auth != null
+        && request.auth.token.role in ['evaluator', 'adjudicator', 'admin']
+        && (request.auth.token.role != 'evaluator'
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid))
+            .data.get('evaluatorType', 'internal') != 'external');
+    }
+
+    function canReadIdeaAttachments(uid, ideaId) {
+      return request.auth != null
+        && firestore.exists(ideaDocumentPath(ideaId))
+        && firestore.get(ideaDocumentPath(ideaId)).data.ownerId == uid
+        && (request.auth.uid == uid || isInternalEvaluator());
+    }
+
+    function canUploadIdeaAttachments(uid, ideaId) {
+      return isOwner(uid)
+        && (!firestore.exists(ideaDocumentPath(ideaId))
+          || (firestore.get(ideaDocumentPath(ideaId)).data.ownerId == uid
+            && firestore.get(ideaDocumentPath(ideaId)).data.get('status', '') == 'needs_amendment'));
+    }
+
+    function canDeleteIdeaAttachments(uid, ideaId) {
+      return canUploadIdeaAttachments(uid, ideaId);
+    }
+
+    function isSupportedUpload() {
+      return request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/gif',
+          'application/pdf',
+          'text/plain',
+          'text/csv',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        ];
+    }
+
+    match /users/{uid}/{displayNameSlug}/ideas/{ideaId}/images/{imageId} {
+      allow read: if canReadIdeaAttachments(uid, ideaId);
+      allow create: if canUploadIdeaAttachments(uid, ideaId) && isSupportedUpload();
+      allow update: if false;
+      allow delete: if canDeleteIdeaAttachments(uid, ideaId);
+    }
+
     match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2026, 12, 14);
+      allow read, write: if false;
     }
   }
 }

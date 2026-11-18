@@ -77,6 +77,7 @@ Every document has `createdAt` and `updatedAt` (Firestore `Timestamp`). Field na
 | feasibilityPlan | map | `{ technicalApproach, operationalPlan, validationEvidence, assumptions, risks }` |
 | financingPlan | map | `{ currency, totalFundingNeeded, fundingSources, costs[] }`; total is the sum of costs |
 | milestones | array<map> | `{ title, targetDate, successMeasure, estimatedCost? }` (1–10 rows) |
+| attachments | array<map> | Up to 5 `{ id, name, storagePath, contentType, sizeBytes }` references; file bytes live in Storage |
 | aiAnalysisConsent / aiAnalysisConsentAt | boolean / Timestamp | Consent and server timestamp for advisory screening |
 | status | string | see section 4 |
 | statusEnteredAt | Timestamp? | Server-set when the current status began; used for stage-duration reporting. Absent on legacy documents until their next status change. |
@@ -84,7 +85,7 @@ Every document has `createdAt` and `updatedAt` (Firestore `Timestamp`). Field na
 | submittedAt | Timestamp | Server timestamp for the current submitted version |
 
 Subcollections:
-- **versions/{version}**: immutable prior submission snapshot containing `{ version, title, problem, proposedSolution, intendedBeneficiaries, plannedLocation, marketPlan, feasibilityPlan, financingPlan, milestones, aiAnalysisConsent, submittedAt, archivedAt }`. The owner may read snapshots; only Functions write them.
+- **versions/{version}**: immutable prior submission snapshot containing `{ version, title, problem, proposedSolution, intendedBeneficiaries, plannedLocation, marketPlan, feasibilityPlan, financingPlan, milestones, attachments, aiAnalysisConsent, submittedAt, archivedAt }`. The owner may read snapshots; only Functions write them.
 - **statusHistory/{entryId}**: `{ from, to, stageId?, byUid, byRole, note?, at }`
 - **feedback/{feedbackId}**: `{ stageId, evaluatorUid, evaluatorName, message, requiresResubmission: true, reply: null | { message, at }, createdAt }`. Functions write evaluator feedback and status history atomically; the owner may read it and add one reply. Email delivery is deferred until the team selects an outbound email provider; the in-app notification and tracking view are available meanwhile.
 - **evaluations/{stageId_evaluatorUid}**: `{ stageId, evaluatorUid, scores: { [criterionId]: number }, comments, total, submittedAt }` (submitter cannot read)
@@ -175,9 +176,11 @@ Status changes go through a Cloud Function (or a rules-restricted write), which 
 ## 6. Storage paths (Firebase Storage)
 
 ```
-ideas/{ideaId}/attachments/{fileName}
+users/{uid}/{displayNameSlug}/ideas/{ideaId}/images/{imageId}
 users/{uid}/avatar.jpg
 ```
+
+Idea attachment objects are private to the owner and internal evaluation staff. Uploads are limited to 5 per idea and 10 MB per file. Supported formats are PDF, JPEG, PNG, WebP, GIF, Word, Excel, PowerPoint, CSV, and plain text. The display-name slug is for readability only; the authenticated UID is authoritative.
 
 ## 7. Rules of the road
 

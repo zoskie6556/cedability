@@ -147,6 +147,7 @@ function makeIdea(): Idea {
       costs: [{ item: 'Equipment', amount: 1000, description: 'Initial setup' }],
     },
     milestones: [],
+    attachments: [],
     aiAnalysisConsent: true,
     category: null,
     similarityCheck: null,

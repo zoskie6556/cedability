@@ -100,6 +100,83 @@
           hint="Town, village or district. Example: Francistown, North-East District."
           [control]="form.controls.basics.controls.plannedLocation" [maxLength]="limits.short"
           [voice]="true" [language]="language()" />
+
+        <section class="attachments" aria-labelledby="attachments-heading">
+          <h3 id="attachments-heading">Have something that helps tell your story?</h3>
+          <p class="attachment-intro">
+            Add a sketch, photo, quote, or supporting document. It is optional, and you can keep going without one.
+          </p>
+          <div
+            class="attachment-dropzone"
+            [class.is-dragging]="isDraggingFiles()"
+            (dragover)="onAttachmentDragOver($event)"
+            (dragleave)="onAttachmentDragLeave($event)"
+            (drop)="onAttachmentDrop($event)"
+          >
+            <input
+              id="idea-attachments"
+              class="attachment-input"
+              type="file"
+              multiple
+              [attr.accept]="attachmentAccept"
+              [attr.aria-describedby]="'attachment-help attachment-error'"
+              [attr.aria-invalid]="attachmentError() ? 'true' : null"
+              [disabled]="submitting() || removingAttachment()"
+              (change)="onAttachmentSelection($event)"
+            />
+            <label class="attachment-prompt" for="idea-attachments">
+              <span class="upload-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+                </svg>
+              </span>
+              <span class="drop-title">Drop your files here</span>
+              <span class="drop-browse">or <span>choose files</span></span>
+            </label>
+          </div>
+          <p id="attachment-help" class="attachment-help">
+            PDF, images, Word, Excel, PowerPoint, CSV, or text · up to {{ attachmentLimits.count }} files ·
+            {{ attachmentLimits.sizeMb }} MB each. We will upload them when you send your idea. Files are not saved
+            with your draft, so please select them again if you return later.
+          </p>
+          <p id="attachment-error" class="error" aria-live="polite">
+            @if (attachmentError(); as error) { {{ error }} }
+          </p>
+
+          @if (existingAttachments().length > 0) {
+            <div class="attachment-existing">
+              <h4>Already attached to this idea</h4>
+              <ul>
+                @for (attachment of existingAttachments(); track attachment.id) {
+                  <li>{{ attachment.name }} <span>({{ attachment.contentType }})</span></li>
+                }
+              </ul>
+            </div>
+          }
+
+          @if (selectedAttachments().length > 0) {
+            <ul class="attachment-list" aria-label="Files selected for your idea" aria-live="polite">
+              @for (selected of selectedAttachments(); track selected.file.name + selected.file.lastModified; let i = $index) {
+                <li class="attachment-item">
+                  <span class="attachment-type" aria-hidden="true">{{ attachmentCategory(selected.file) }}</span>
+                  <span class="attachment-details">
+                    <strong>{{ selected.file.name }}</strong>
+                    <span>{{ attachmentCategory(selected.file) }} · {{ attachmentSize(selected.file) }}</span>
+                  </span>
+                  <button
+                    type="button"
+                    class="remove-attachment"
+                    [disabled]="submitting() || removingAttachment()"
+                    [attr.aria-label]="'Remove ' + selected.file.name"
+                    (click)="removeSelectedAttachment(i)"
+                  >
+                    Remove
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        </section>
       }
 
       @case ('market') {
@@ -238,7 +315,13 @@
     }
 
     @if (submitting()) {
-      <app-idea-loader [label]="isResubmission() ? 'Resubmitting your idea' : 'Submitting your idea'" />
+      <app-idea-loader
+        [label]="selectedAttachments().length > 0
+          ? 'Uploading your files and submitting your idea'
+          : (isResubmission() ? 'Resubmitting your idea' : 'Submitting your idea')" />
+    }
+    @if (removingAttachment()) {
+      <app-idea-loader label="Removing the selected file" />
     }
 
     <div class="actions">

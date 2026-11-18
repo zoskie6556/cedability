@@ -7,6 +7,7 @@ const destination = resolve(repositoryRoot, 'functions', 'src', 'shared');
 const sharedFiles = [
   'src/app/shared/workflow/idea-workflow.ts',
   'src/app/shared/models/automated-review.model.ts',
+  'src/app/shared/models/idea-attachment.model.ts',
 ];
 
 await mkdir(destination, { recursive: true });

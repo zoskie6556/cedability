@@ -87,7 +87,7 @@ describe('idea form', () => {
     // exactly the keys the create rule allows (status/createdAt/automatedReview are added by the service)
     expect(Object.keys(idea).sort()).toEqual(
       ['aiAnalysisConsent', 'feasibilityPlan', 'financingPlan', 'intendedBeneficiaries', 'marketPlan',
-       'milestones', 'ownerId', 'ownerName', 'plannedLocation', 'problem', 'proposedSolution', 'title'].sort(),
+       'milestones', 'attachments', 'ownerId', 'ownerName', 'plannedLocation', 'problem', 'proposedSolution', 'title'].sort(),
     );
   });
 

@@ -1,5 +1,12 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 import { NOTE_REQUIRED } from '../shared/idea-workflow';
+import {
+  isIdeaAttachmentContentType,
+  isIdeaAttachmentPath,
+  MAX_IDEA_ATTACHMENT_BYTES,
+  MAX_IDEA_ATTACHMENTS,
+  type IdeaAttachment,
+} from '../shared/idea-attachment.model';
 
 const MAX_FEEDBACK_NOTE_LENGTH = 500;
 const MAX_ID_LENGTH = 128;
@@ -15,6 +22,7 @@ const IDEA_FIELDS = [
   'feasibilityPlan',
   'financingPlan',
   'milestones',
+  'attachments',
   'aiAnalysisConsent',
 ] as const;
 
@@ -56,6 +64,7 @@ export interface ResubmissionPlan {
     successMeasure: string;
     estimatedCost: number | null;
   }>;
+  attachments: IdeaAttachment[];
   aiAnalysisConsent: true;
 }
 
@@ -154,6 +163,7 @@ export function parseResubmissionInput(value: unknown, ownerUid: string): Resubm
       estimatedCost,
     };
   });
+  const attachments = parseIdeaAttachments(rawIdea['attachments'], ownerUid, ideaId);
 
   return {
     ideaId,
@@ -184,9 +194,44 @@ export function parseResubmissionInput(value: unknown, ownerUid: string): Resubm
         costs,
       },
       milestones,
+      attachments,
       aiAnalysisConsent: true,
     },
   };
+}
+
+function parseIdeaAttachments(value: unknown, ownerUid: string, ideaId: string): IdeaAttachment[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_IDEA_ATTACHMENTS) {
+    throw new HttpsError('invalid-argument', 'The attachment list is invalid.');
+  }
+
+  const seenIds = new Set<string>();
+  return value.map((rawAttachment) => {
+    const attachment = asRecord(rawAttachment, 'attachment');
+    const id = requireText(attachment['id'], 'attachment id', 36);
+    const name = requireText(attachment['name'], 'attachment name', 255);
+    const storagePath = attachment['storagePath'];
+    const contentType = attachment['contentType'];
+    const sizeBytes = attachment['sizeBytes'];
+    if (
+      !/^[a-f0-9-]{36}$/.test(id) ||
+      seenIds.has(id) ||
+      !isIdeaAttachmentPath(storagePath, ownerUid, ideaId, id) ||
+      !isIdeaAttachmentContentType(contentType) ||
+      typeof sizeBytes !== 'number' ||
+      !Number.isSafeInteger(sizeBytes) ||
+      sizeBytes < 1 ||
+      sizeBytes > MAX_IDEA_ATTACHMENT_BYTES ||
+      Object.keys(attachment).some(
+        (key) => !['id', 'name', 'storagePath', 'contentType', 'sizeBytes'].includes(key),
+      )
+    ) {
+      throw new HttpsError('invalid-argument', 'An attachment is invalid.');
+    }
+    seenIds.add(id);
+    return { id, name, storagePath, contentType, sizeBytes };
+  });
 }
 
 export function readIdeaVersion(value: unknown): number {

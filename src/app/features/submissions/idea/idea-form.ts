@@ -8,6 +8,7 @@ import {
   Validators,
 } from '@angular/forms';
 import type { Idea, NewIdea } from '../../../shared/models/idea.model';
+import type { IdeaAttachment } from '../../../shared/models/idea-attachment.model';
 
 /**
  * The idea form's STRUCTURE, validation and mapping, kept out of the component so it
@@ -149,7 +150,12 @@ function addCounts(
 }
 
 /** Turn the validated form into the exact object `UserDataService.createIdea` expects. */
-export function toNewIdea(form: IdeaFormGroup, ownerId: string, ownerName: string): NewIdea {
+export function toNewIdea(
+  form: IdeaFormGroup,
+  ownerId: string,
+  ownerName: string,
+  attachments: IdeaAttachment[] = [],
+): NewIdea {
   const v = form.getRawValue();
   const trim = (s: string) => s.trim();
   const costs = v.financing.costs.map((c) => ({
@@ -192,6 +198,7 @@ export function toNewIdea(form: IdeaFormGroup, ownerId: string, ownerName: strin
       successMeasure: trim(m.successMeasure),
       estimatedCost: m.estimatedCost,
     })),
+    attachments,
     aiAnalysisConsent: v.consent.aiAnalysis,
   };
 }

@@ -46,6 +46,16 @@ export interface AutomatedReviewReport {
   failureMessage: string | null;
 }
 
+export interface IdeaPreflightReview {
+  summary: string;
+  criteria: Record<AutomatedReviewCriterion, AutomatedReviewFinding>;
+  strengths: string[];
+  informationGaps: string[];
+  questionsForHumanEvaluator: string[];
+  limitations: string[];
+  similarityMatches: Array<Omit<SimilarIdeaMatch, 'ideaId'>>;
+}
+
 export type SimilarityCheckStatus = 'complete' | 'failed';
 
 export interface SimilarIdeaMatch {

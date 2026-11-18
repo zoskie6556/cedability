@@ -1,5 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { IdeaStatus } from '../workflow/idea-workflow';
+import type { IdeaAttachment } from './idea-attachment.model';
+export type { IdeaAttachment } from './idea-attachment.model';
 import type {
   AutomatedReviewReport,
   IdeaCategory,
@@ -56,6 +58,7 @@ export interface IdeaDocument {
   feasibilityPlan: IdeaFeasibilityPlan;
   financingPlan: IdeaFinancingPlan;
   milestones: IdeaMilestone[];
+  attachments: IdeaAttachment[];
   aiAnalysisConsent: boolean;
   category: IdeaCategory | null;
   similarityCheck: SimilarityCheckResult | null;
@@ -102,5 +105,6 @@ export type NewIdea = Pick<
   | 'feasibilityPlan'
   | 'financingPlan'
   | 'milestones'
+  | 'attachments'
   | 'aiAnalysisConsent'
 >;

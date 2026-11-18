@@ -171,6 +171,7 @@ function createVersionSnapshot(current: DocumentSnapshot): DocumentData {
     feasibilityPlan: current.get('feasibilityPlan'),
     financingPlan: current.get('financingPlan'),
     milestones: current.get('milestones'),
+    attachments: current.get('attachments') ?? [],
     aiAnalysisConsent: current.get('aiAnalysisConsent'),
     submittedAt: current.get('submittedAt') ?? current.get('createdAt') ?? Timestamp.now(),
     archivedAt: FieldValue.serverTimestamp(),
